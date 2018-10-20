@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:fire="http://schemas.microsoft.com/wix/FirewallExtension">
+  <Product Id="*" Name="Moonlight Internet Streaming Helper" Language="1033" Version="1.0.0.0" Manufacturer="Cameron Gutman" UpgradeCode="cfc2fb53-88e2-4867-851d-9ed9fe7ab2a3">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="MISHSetup" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Moonlight Internet Streaming Helper" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Moonlight Internet Streaming Helper" />
+      </Directory>
+      <Directory Id="CommonAppDataFolder">
+        <Directory Name="MISS" Id="MISSLogFolder" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MISS">
+        <File Source="$(var.miss.TargetPath)" KeyPath="yes">
+          <fire:FirewallException Id="MISSFwException"
+                                  Scope="any"
+                                  Name="Moonlight Internet Streaming Service"/>
+        </File>
+        <CreateFolder Directory="MISSLogFolder" />
+        <ServiceInstall Type="ownProcess"
+                        Name="MISS"
+                        DisplayName="Moonlight Internet Streaming Service"
+                        Description="Automatically manages router port forwarding rules required to use Moonlight over the Internet"
+                        Start="auto"
+                        Account="LocalSystem"
+                        ErrorControl="ignore"
+                        Interactive="no">
+          <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" />
+        </ServiceInstall>
+        <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="MISS" Wait="yes" />
+      </Component>
+      <Component Id="MIST">
+        <File Id="MistExe" Source="$(var.mist.TargetPath)" KeyPath="yes">
+          <fire:FirewallException Id="MISTFwException"
+                                  Scope="any"
+                                  Name="Moonlight Internet Streaming Tester"/>
+        </File>
+      </Component>
+      <Component Id="Shortcuts" Guid="*">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="Moonlight Internet Streaming Tester"
+                  Description="Test your configuration for streaming with Moonlight over the Internet"
+                  Target="[#MistExe]"
+                  Directory="ApplicationProgramsFolder"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="CleanupStartMenuShortcut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Moonlight Internet Streaming Tester" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>
