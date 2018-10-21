@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <shellapi.h>
+#include <objbase.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -96,7 +97,9 @@ void DisplayMessage(const char* message, bool error = true)
             "Moonlight Internet Streaming Tester", flags))
         {
         case IDYES:
-            ShellExecuteA(nullptr, "open", logFilePath, nullptr, nullptr, SW_SHOW);
+            // It's recommended to initialize COM before calling ShellExecute()
+            CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+            ShellExecuteA(nullptr, "open", logFilePath, nullptr, nullptr, SW_SHOWNORMAL);
             break;
         }
     }
