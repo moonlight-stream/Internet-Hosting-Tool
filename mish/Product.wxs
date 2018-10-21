@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:fire="http://schemas.microsoft.com/wix/FirewallExtension">
-  <Product Id="*" Name="Moonlight Internet Streaming Helper" Language="1033" Version="!(bind.fileVersion.MistExe)" Manufacturer="Cameron Gutman" UpgradeCode="cfc2fb53-88e2-4867-851d-9ed9fe7ab2a3">
+  <Product Id="*" Name="Moonlight Internet Streaming Helper" Language="1033" Version="!(bind.fileVersion.MistExe)"
+           Manufacturer="Moonlight Game Streaming Project" UpgradeCode="cfc2fb53-88e2-4867-851d-9ed9fe7ab2a3">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
