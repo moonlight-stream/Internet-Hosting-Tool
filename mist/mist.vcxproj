@@ -161,6 +161,12 @@
   <ItemGroup>
     <ClCompile Include="mist.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="mist.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\version.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

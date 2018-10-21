@@ -9,7 +9,7 @@ BEGIN
         BLOCK "040904E4"
         BEGIN
             VALUE "CompanyName",        VER_COMPANYNAME_STR
-            VALUE "FileDescription",    "Moonlight Internet Streaming Service"
+            VALUE "FileDescription",    "Moonlight Internet Streaming Tester"
             VALUE "FileVersion",        VER_FILEVERSION_STR
         END
     END

@@ -25,7 +25,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="version.h">
+    <ClInclude Include="..\version.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
