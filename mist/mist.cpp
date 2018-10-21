@@ -640,8 +640,6 @@ int main(int argc, char* argv[])
 {
     WSADATA wsaData;
 
-    printf("Testing GameStream configuration...\n");
-
     char tempPath[MAX_PATH + 1];
     GetTempPathA(sizeof(tempPath), tempPath);
 
@@ -654,6 +652,8 @@ int main(int argc, char* argv[])
         return err;
     }
 
+    fprintf(stderr, "Checking if GameStream is enabled...\n");
+
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
         return -1;
@@ -665,6 +665,8 @@ int main(int argc, char* argv[])
         SOCKADDR_IN6 sin6;
     };
     char msgBuf[2048];
+
+    fprintf(stderr, "Testing local GameStream connectivity...\n");
 
     // Try to connect via IPv4 loopback
     ss = {};
@@ -683,6 +685,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    fprintf(stderr, "Testing network GameStream connectivity...\n");
+
     // Try to connect via LAN IPv4 address
     printf("Testing GameStream ports via local network\n");
     if (!TestAllPorts(&ss,
@@ -692,10 +696,14 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    fprintf(stderr, "Detecting public IP address...\n");
+
     bool upnpRulesFound;
     if (!CheckWANAccess(&sin, &upnpRulesFound)) {
         return -1;
     }
+
+    fprintf(stderr, "Testing Internet GameStream connectivity...\n");
 
     // Try to connect via WAN IPv4 address
     printf("Testing GameStream ports via WAN address\n");
