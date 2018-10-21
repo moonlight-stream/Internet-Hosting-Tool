@@ -271,7 +271,8 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
     }
     else if (ret == 3) {
         printf("No UPnP IGD found!" NL);
-        goto Exit;
+        FreeUPNPUrls(&urls);
+        return false;
     }
     else if (ret == 1) {
         printf("Found a connected UPnP IGD" NL);
@@ -284,7 +285,7 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
     }
     else {
         printf("UPNP_GetValidIGD() failed: %d" NL, ret);
-        goto Exit;
+        return false;
     }
 
     if (ipv6) {
