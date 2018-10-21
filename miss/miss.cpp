@@ -557,6 +557,7 @@ DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
         if (lastGameStreamState != currentGameStreamState) {
             SetEvent((HANDLE)Context);
         }
+        lastGameStreamState = currentGameStreamState;
     }
 
     printf("RegNotifyChangeKeyValue() failed: %d" NL, err);
