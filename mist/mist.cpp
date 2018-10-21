@@ -137,7 +137,12 @@ bool IsGameStreamEnabled()
     }
 }
 
-bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
+enum PortTestStatus {
+    PortTestOk,
+    PortTestError,
+    PortTestUnknown
+};
+PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
 {
     SOCKET clientSock = INVALID_SOCKET, serverSock = INVALID_SOCKET;
     int err;
@@ -145,7 +150,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
     clientSock = socket(addr->ss_family, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
     if (clientSock == INVALID_SOCKET) {
         printf("socket() failed: %d\n", WSAGetLastError());
-        return false;
+        return PortTestError;
     }
 
     if (withServer) {
@@ -153,7 +158,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
         if (serverSock == INVALID_SOCKET) {
             printf("socket() failed: %d\n", WSAGetLastError());
             closesocket(clientSock);
-            return false;
+            return PortTestError;
         }
 
         SOCKADDR_IN sin = {};
@@ -161,24 +166,36 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
         sin.sin_port = htons(port);
         err = bind(serverSock, (struct sockaddr*)&sin, sizeof(sin));
         if (err == SOCKET_ERROR) {
-            printf("bind() failed: %d\n", WSAGetLastError());
-
-            // If someone is already listening (perhaps GFE is currently streaming),
-            // we can proceed if it's a TCP connection
-            if (WSAGetLastError() != WSAEADDRINUSE || proto == IPPROTO_UDP) {
+            if (WSAGetLastError() == WSAEADDRINUSE) {
+                // If someone is already listening (perhaps GFE is currently streaming),
+                // we can proceed if it's a TCP connection.
+                if (proto == IPPROTO_TCP) {
+                    closesocket(serverSock);
+                    serverSock = INVALID_SOCKET;
+                }
+                else {
+                    // We can't continue to test for UDP ports.
+                    printf("Unknown (in use)\n");
+                    closesocket(clientSock);
+                    closesocket(serverSock);
+                    return PortTestUnknown;
+                }
+            }
+            else {
+                printf("bind() failed: %d\n", WSAGetLastError());
                 closesocket(clientSock);
                 closesocket(serverSock);
-                return false;
+                return PortTestError;
             }
         }
 
-        if (proto == IPPROTO_TCP) {
+        if (proto == IPPROTO_TCP && serverSock != INVALID_SOCKET) {
             err = listen(serverSock, 1);
             if (err == SOCKET_ERROR) {
                 printf("listen() failed: %d\n", WSAGetLastError());
                 closesocket(clientSock);
                 closesocket(serverSock);
-                return false;
+                return PortTestError;
             }
         }
     }
@@ -191,7 +208,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
         if (serverSock != INVALID_SOCKET) {
             closesocket(serverSock);
         }
-        return false;
+        return PortTestError;
     }
 
     SOCKADDR_IN6 sin6;
@@ -233,7 +250,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
             closesocket(serverSock);
         }
 
-        return err == 1;
+        return err == 1 ? PortTestOk : PortTestError;
     }
     else {
         const char testMsg[] = "mist-test";
@@ -242,7 +259,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
             printf("sendto() failed: %d\n", WSAGetLastError());
             closesocket(clientSock);
             closesocket(serverSock);
-            return false;
+            return PortTestError;
         }
 
         struct timeval timeout = {};
@@ -268,7 +285,7 @@ bool TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
         closesocket(clientSock);
         closesocket(serverSock);
 
-        return err == 1;
+        return err == 1 ? PortTestOk : PortTestError;
     }
 }
 
@@ -283,15 +300,20 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, const char* baseMessage, char* message
         printf("Testing %s %d...",
             k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
             k_Ports[i].port);
-        if (!TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer)) {
-            int msgLen = snprintf(message, messageLength, "%s %d\n",
-                k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
-                k_Ports[i].port);
-            message += msgLen;
-            messageLength -= msgLen;
-            ret = false;
+        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+        if (status != PortTestOk) {
+            // If we got an unknown result, assume it matches with whatever
+            // we've gotten so far.
+            if (status == PortTestError || !ret) {
+                int msgLen = snprintf(message, messageLength, "%s %d\n",
+                    k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
+                    k_Ports[i].port);
+                message += msgLen;
+                messageLength -= msgLen;
 
-            // Keep going to check all ports and report the failing ones
+                // Keep going to check all ports and report the failing ones
+                ret = false;
+            }
         }
     }
 
