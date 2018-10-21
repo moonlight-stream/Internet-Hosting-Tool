@@ -325,7 +325,6 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
         }
     }
 
-Exit:
     FreeUPNPUrls(&urls);
     return success;
 }
