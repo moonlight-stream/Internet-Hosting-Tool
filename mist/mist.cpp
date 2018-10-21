@@ -529,34 +529,39 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, bool* foundPortForwardingRules)
         char wanAddrStr[128];
         int ret = UPNP_GetValidIGD(ipv4Devs, &urls, &data, myAddr, sizeof(myAddr));
         if (ret != 0) {
-            ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddrStr);
-            if (ret == UPNPCOMMAND_SUCCESS) {
-                wanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
-                printf("%s (UPnP)\n", wanAddrStr);
-                gotWanAddress = true;
+            // Connected or disconnected IGD
+            if (ret == 1 || ret == 2) {
+                ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddrStr);
+                if (ret == UPNPCOMMAND_SUCCESS) {
+                    wanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
+                    printf("%s (UPnP)\n", wanAddrStr);
+                    gotWanAddress = true;
+                }
+
+                char conflictMessage[512];
+                *foundPortForwardingRules = true;
+                for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
+                    char conflictEntry[128];
+                    UPnPPortStatus status = UPnPCheckPort(&urls, &data, k_Ports[i].proto, myAddr, k_Ports[i].port, conflictEntry);
+                    if (status != OK) {
+                        *foundPortForwardingRules = false;
+                    }
+                    switch (status)
+                    {
+                    case CONFLICTED:
+                        snprintf(conflictMessage, sizeof(conflictMessage),
+                            "Detected a port forwarding conflict with another PC on your network: %s\n\n"
+                            "Remove that PC from your network or uninstall the Moonlight Internet Streaming Service from it, then restart your router.",
+                            conflictEntry);
+                        DisplayMessage(conflictMessage);
+                        return false;
+                    default:
+                        continue;
+                    }
+                }
             }
 
-            char conflictMessage[512];
-            *foundPortForwardingRules = true;
-            for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-                char conflictEntry[128];
-                UPnPPortStatus status = UPnPCheckPort(&urls, &data, k_Ports[i].proto, myAddr, k_Ports[i].port, conflictEntry);
-                if (status != OK) {
-                    *foundPortForwardingRules = false;
-                }
-                switch (status)
-                {
-                case CONFLICTED:
-                    snprintf(conflictMessage, sizeof(conflictMessage),
-                        "Detected a port forwarding conflict with another PC on your network: %s\n\n"
-                        "Remove that PC from your network or uninstall the Moonlight Internet Streaming Service from it, then restart your router.",
-                        conflictEntry);
-                    DisplayMessage(conflictMessage);
-                    return false;
-                default:
-                    continue;
-                }
-            }
+            FreeUPNPUrls(&urls);
         }
     }
 

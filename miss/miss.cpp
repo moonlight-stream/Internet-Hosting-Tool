@@ -269,17 +269,15 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
         printf("No UPnP device found!" NL);
         return false;
     }
+    else if (ret == 3) {
+        printf("No UPnP IGD found!" NL);
+        goto Exit;
+    }
     else if (ret == 1) {
         printf("Found a connected UPnP IGD" NL);
     }
     else if (ret == 2) {
         printf("Found a disconnected UPnP IGD (!)" NL);
-
-        // Even if we are able to add forwarding entries, go ahead and try NAT-PMP
-        success = false;
-    }
-    else if (ret == 3) {
-        printf("Found UPnP devices (assuming it's an IGD) (!)" NL);
 
         // Even if we are able to add forwarding entries, go ahead and try NAT-PMP
         success = false;
