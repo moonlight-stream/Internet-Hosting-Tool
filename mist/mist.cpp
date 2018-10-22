@@ -111,7 +111,7 @@ void DisplayMessage(const char* message, MessagePriority priority = MpError, boo
     }
     MessageBoxA(nullptr, message, "Moonlight Internet Streaming Tester", flags);
 
-    if (priority == MpError && terminal) {
+    if (priority != MpInfo && terminal) {
         flags = MB_YESNO | MB_TOPMOST | MB_SETFOREGROUND | MB_ICONINFORMATION;
         switch (MessageBoxA(nullptr, "Would you like to view the troubleshooting log?",
             "Moonlight Internet Streaming Tester", flags))
