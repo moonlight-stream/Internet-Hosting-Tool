@@ -628,6 +628,14 @@ HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpConte
         return NO_ERROR;
 
     case SERVICE_CONTROL_STOP:
+        ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+        ServiceStatus.dwControlsAccepted = 0;
+        SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
+
+        printf("Removing UPnP/NAT-PMP rules after service stop request\n");
+        UpdatePortMappings(false);
+
+        printf("The service is stopping\n");
         ServiceStatus.dwCurrentState = SERVICE_STOPPED;
         SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
         return NO_ERROR;
