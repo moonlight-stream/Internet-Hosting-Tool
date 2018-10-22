@@ -142,12 +142,11 @@ bool IsGameStreamEnabled()
     len = sizeof(enabled);
     error = RegQueryValueExA(key, "EnableStreaming", nullptr, nullptr, (LPBYTE)&enabled, &len);
     RegCloseKey(key);
-    if (error != ERROR_SUCCESS) {
-        printf("RegQueryValueExA() failed: %d\n", error);
-        DisplayMessage("GeForce Experience is not installed. Please install GeForce Experience to use Moonlight.");
-        return false;
-    }
-    else if (!enabled) {
+    if (error != ERROR_SUCCESS || !enabled) {
+        // GFE may not even write EnableStreaming until the user enables GameStream for the first time
+        if (error != ERROR_SUCCESS) {
+            printf("RegQueryValueExA() failed: %d\n", error);
+        }
         DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.");
         return false;
     }
