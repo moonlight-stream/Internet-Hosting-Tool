@@ -708,7 +708,7 @@ int main(int argc, char* argv[])
     char tempPath[MAX_PATH + 1];
     GetTempPathA(sizeof(tempPath), tempPath);
 
-    snprintf(logFilePath, sizeof(logFilePath), "%s\\%s", tempPath, "mist.log");
+    snprintf(logFilePath, sizeof(logFilePath), "%s\\%s", tempPath, "mis-test.log");
     freopen(logFilePath, "w", stdout);
 
     int err = WSAStartup(MAKEWORD(2, 2), &wsaData);
