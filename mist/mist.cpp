@@ -784,7 +784,7 @@ int main(int argc, char* argv[])
 
         // We don't actually care about the outcome here but it's nice to have in logs
         // to determine whether solving the double NAT will actually make Moonlight work.
-        TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf));
+        TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf));
 
         printf("Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
     }
