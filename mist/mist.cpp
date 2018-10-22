@@ -653,7 +653,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     else {
         char addrStr[64];
         inet_ntop(AF_INET, &wanAddr->sin_addr, addrStr, sizeof(addrStr));
-        printf("%s (STUN)\n", addrStr);
+        printf("%s\n", addrStr);
 
         if (!gotReportedWanAddress) {
             // If we didn't get anything from UPnP or NAT-PMP, just populate the reported
@@ -799,21 +799,25 @@ int main(int argc, char* argv[])
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         if (IsDoubleNAT(&locallyReportedWanAddr)) {
             DisplayMessage("Your router appears be connected to the Internet through another router. This configuration breaks port forwarding. To resolve this, switch one of the routers into bridge mode.");
+            DisplayMessage(msgBuf);
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
             snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Contact your ISP and ask for a dedicated public IP address.");
+            DisplayMessage(msgBuf);
         }
         else if (igdDisconnected) {
             snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP is enabled in your router settings and that you don't have two devices acting as routers connected together.");
+            DisplayMessage(msgBuf);
         }
         else if (upnpRulesFound) {
-            snprintf(msgBuf, sizeof(msgBuf), "Found UPnP rules, but we couldn't confirm that they were working. You can confirm by streaming from a different network and typing the following address into Moonlight's Add PC dialog: %s\n\n"
+            snprintf(msgBuf, sizeof(msgBuf), "We found the correct UPnP rules, but we couldn't confirm that they are working. You can try streaming from a different network by typing the following address into Moonlight's Add PC dialog: %s\n\n"
                 "If that doesn't work, check your router settings for any existing Moonlight port forwarding entries and delete them.", wanAddrStr);
+            DisplayMessage(msgBuf, MpWarn);
         }
         else {
             snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP is enabled in your router settings.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+            DisplayMessage(msgBuf);
         }
-        DisplayMessage(msgBuf);
         return -1;
     }
 
