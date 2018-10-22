@@ -557,10 +557,13 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, bool* foundPortForwardingRules)
             // Connected or disconnected IGD
             if (ret == 1 || ret == 2) {
                 ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddrStr);
-                if (ret == UPNPCOMMAND_SUCCESS) {
+                if (ret == UPNPCOMMAND_SUCCESS && strlen(wanAddrStr) > 0) {
                     wanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
                     printf("%s (UPnP)\n", wanAddrStr);
-                    gotWanAddress = true;
+
+                    if (wanAddr->sin_addr.S_un.S_addr != 0) {
+                        gotWanAddress = true;
+                    }
                 }
 
                 char conflictMessage[512];
@@ -601,7 +604,9 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, bool* foundPortForwardingRules)
             wanAddr->sin_addr = response.pnu.publicaddress.addr;
             inet_ntop(AF_INET, &response.pnu.publicaddress.addr, addrStr, sizeof(addrStr));
             printf("%s (NAT-PMP)\n", addrStr);
-            gotWanAddress = true;
+            if (wanAddr->sin_addr.S_un.S_addr != 0) {
+                gotWanAddress = true;
+            }
         }
     }
 
