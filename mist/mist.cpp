@@ -626,11 +626,11 @@ bool IsPossibleCGN(PSOCKADDR_IN wanAddr)
 {
     DWORD addr = htonl(wanAddr->sin_addr.S_un.S_addr);
 
-    // 10.0.0.0/24 - ISPs used to use this
+    // 10.0.0.0/8 - ISPs used to use this
     if ((addr & 0xFF000000) == 0x0A000000) {
         return true;
     }
-    // 100.64.0.0 - RFC6598 official CGN address
+    // 100.64.0.0/10 - RFC6598 official CGN address
     else if ((addr & 0xFFC0) == 0x64400000) {
         return true;
     }
@@ -642,11 +642,11 @@ bool IsDoubleNAT(PSOCKADDR_IN wanAddr)
 {
     DWORD addr = htonl(wanAddr->sin_addr.S_un.S_addr);
 
-    // 10.0.0.0/24
+    // 10.0.0.0/8
     if ((addr & 0xFF000000) == 0x0A000000) {
         return true;
     }
-    // 172.16.0.0/20
+    // 172.16.0.0/12
     else if ((addr & 0xFFF00000) == 0xAC100000) {
         return true;
     }
