@@ -29,6 +29,7 @@
 
 #define SERVICE_NAME "MISS"
 #define UPNP_SERVICE_NAME "Moonlight"
+#define POLLING_DELAY_SEC 120
 #define PORT_MAPPING_DURATION_SEC 3600
 #define UPNP_DISCOVERY_DELAY_MS 5000
 
@@ -590,7 +591,7 @@ int Run()
         fflush(stdout);
 
         ULONGLONG beforeSleepTime = GetTickCount64();
-        DWORD ret = WaitForMultipleObjects(ARRAYSIZE(events), events, false, (PORT_MAPPING_DURATION_SEC * 1000) / 2);
+        DWORD ret = WaitForMultipleObjects(ARRAYSIZE(events), events, false, POLLING_DELAY_SEC * 1000);
         if (ret == WAIT_OBJECT_0) {
             ResetLogFile();
 
