@@ -618,6 +618,9 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
 
             FreeUPNPUrls(&urls);
         }
+        else {
+            printf("No UPnP devices detected\n");
+        }
     }
 
     // Use the delay of upnpDiscoverAll() to also allow the NAT-PMP endpoint time to respond
