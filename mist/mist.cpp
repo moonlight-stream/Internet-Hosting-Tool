@@ -773,7 +773,7 @@ int main(int argc, char* argv[])
 
     if (igdDisconnected) {
         DisplayMessage("Your router reports to be disconnected from the Internet. Make sure UPnP is enabled in your router settings. "
-            "If this message persists, make sure your router isn't connected to the Internet through another router. If it is, switch one of the routers to bridge mode.\n\n"
+            "If this message persists, make sure your router isn't connected to the Internet through another router. If it is, switch one of the routers to bridge/AP mode.\n\n"
             "Just in case this warning is due to a buggy router, the test will continue anyway.", MpWarn, false);
     }
 
@@ -797,7 +797,7 @@ int main(int argc, char* argv[])
     printf("Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         if (IsDoubleNAT(&locallyReportedWanAddr)) {
-            DisplayMessage("Your router appears be connected to the Internet through another router. This configuration breaks port forwarding. To resolve this, switch one of the routers into bridge mode.");
+            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. This configuration breaks port forwarding. To resolve this, switch one of the routers into bridge/AP mode.");
             DisplayMessage(msgBuf);
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
