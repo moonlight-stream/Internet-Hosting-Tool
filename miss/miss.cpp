@@ -350,7 +350,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
     }
 
     printf("Updating NAT-PMP port mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", port);
-    int err = sendnewportmappingrequest(natpmp, natPmpProto, port, port, enable ? PORT_MAPPING_DURATION_SEC : 0);
+    int err = sendnewportmappingrequest(natpmp, natPmpProto, port, enable ? port : 0, enable ? PORT_MAPPING_DURATION_SEC : 0);
     if (err < 0) {
         printf("ERROR %d" NL, err);
         return false;
@@ -399,8 +399,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
 
         // It couldn't assign us the external port we requested and gave us an alternate external port.
         // We can't use this alternate mapping, so immediately release it.
-        sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport,
-            response.pnu.newportmapping.mappedpublicport, 0);
+        sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport, 0, 0);
         return false;
     }
     else {
