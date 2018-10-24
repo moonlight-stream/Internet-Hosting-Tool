@@ -12,6 +12,8 @@
 #include <shellapi.h>
 #include <objbase.h>
 
+#include "..\version.h"
+
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
 #pragma comment(lib, "ws2_32.lib")
@@ -712,6 +714,12 @@ int main(int argc, char* argv[])
 
     snprintf(logFilePath, sizeof(logFilePath), "%s\\%s", tempPath, "mis-test.log");
     freopen(logFilePath, "w", stdout);
+
+    // Print a log header
+    printf("Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n");
+
+    // Print a console header
+    fprintf(stderr, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n\n");
 
     int err = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (err != NO_ERROR) {

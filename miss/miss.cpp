@@ -11,6 +11,8 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include "..\version.h"
+
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
 #pragma comment(lib, "ws2_32.lib")
@@ -548,6 +550,9 @@ void ResetLogFile()
 
     // Redirect stdout to this new file
     freopen(currentLogFilePath, "w", stdout);
+
+    // Print a log header
+    printf("Moonlight Internet Streaming Service v" VER_VERSION_STR NL);
 }
 
 DWORD WINAPI GameStreamStateChangeThread(PVOID Context)

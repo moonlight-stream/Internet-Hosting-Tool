@@ -2,7 +2,7 @@
 #include "../version.h"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     VER_FILEVERSION
+FILEVERSION     VER_VERSION
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -10,7 +10,7 @@ BEGIN
         BEGIN
             VALUE "CompanyName",        VER_COMPANYNAME_STR
             VALUE "FileDescription",    "Moonlight Internet Streaming Service"
-            VALUE "FileVersion",        VER_FILEVERSION_STR
+            VALUE "ProductName",        VER_PRODUCTNAME_STR
         END
     END
 
