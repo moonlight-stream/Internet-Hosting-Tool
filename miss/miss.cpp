@@ -25,7 +25,6 @@
 #include <natpmp.h>
 
 #define NL "\n"
-#define STR(x) #x
 
 #define SERVICE_NAME "MISS"
 #define UPNP_SERVICE_NAME "Moonlight"
@@ -149,10 +148,11 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     }
 
     // Create or update the expiration time of an existing mapping
+    snprintf(leaseDuration, sizeof(leaseDuration), "%d", PORT_MAPPING_DURATION_SEC);
     printf("Updating UPnP port mapping for %s %s -> %s...", protoStr, portStr, myAddr);
     err = UPNP_AddPortMapping(
         urls->controlURL, data->first.servicetype, portStr,
-        portStr, myAddr, myDesc, protoStr, nullptr, STR(PORT_MAPPING_DURATION_SEC));
+        portStr, myAddr, myDesc, protoStr, nullptr, leaseDuration);
     if (err == 725) { // OnlyPermanentLeasesSupported
         err = UPNP_AddPortMapping(
             urls->controlURL, data->first.servicetype, portStr,
