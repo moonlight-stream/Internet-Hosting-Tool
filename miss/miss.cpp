@@ -134,10 +134,23 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
             }
         }
         else {
-            // UPnP IGDs won't let unauthenticated clients delete other conflicting port mappings
-            // for security reasons, so we have to give up in this case.
             printf("CONFLICT: %s %s" NL, intClient, desc);
-            return false;
+
+            // Some UPnP IGDs won't let unauthenticated clients delete other conflicting port mappings
+            // for security reasons, but we will give it a try anyway.
+            printf("Trying to delete conflicting UPnP mapping for %s %s -> %s...", protoStr, portStr, intClient);
+            err = UPNP_DeletePortMapping(urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr);
+            if (err == UPNPCOMMAND_SUCCESS) {
+                printf("OK" NL);
+            }
+            else if (err == 606) {
+                printf("UNAUTHORIZED" NL);
+                return false;
+            }
+            else {
+                printf("ERROR %d" NL, err);
+                return false;
+            }
         }
     }
     else {
