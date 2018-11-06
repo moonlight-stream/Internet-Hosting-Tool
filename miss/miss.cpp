@@ -304,6 +304,11 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
         return false;
     }
 
+    if (data.IPv6FC.controlurl[0] == 0) {
+        printf("IPv6 firewall control not supported by UPnP IGD!" NL);
+        return false;
+    }
+
     if (ipv6) {
         // Convert what is likely a IPv6 temporary address into
         // the stable IPv6 address for the same interface.
