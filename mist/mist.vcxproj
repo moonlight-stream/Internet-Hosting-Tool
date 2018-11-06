@@ -160,6 +160,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="mist.cpp" />
+    <ClCompile Include="stun.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="mist.rc" />

@@ -27,28 +27,7 @@
 #define NATPMP_STATICLIB
 #include <natpmp.h>
 
-#define STUN_MESSAGE_BINDING_REQUEST 0x0001
-#define STUN_MESSAGE_BINDING_SUCCESS 0x0101
-#define STUN_MESSAGE_COOKIE 0x2112a442
-
-#define STUN_ATTRIBUTE_MAPPED_ADDRESS 0x0001
-#define STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS 0x0020
-
-typedef struct _STUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE {
-    USHORT attributeType;
-    USHORT attributeLength;
-    UCHAR reserved;
-    UCHAR addressFamily;
-    USHORT port;
-    ULONG address;
-} STUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE, *PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE;
-
-typedef struct _STUN_MESSAGE {
-    USHORT messageType;
-    USHORT messageLength;
-    UINT magicCookie;
-    UINT transactionId[3];
-} STUN_MESSAGE, *PSTUN_MESSAGE;
+bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN wanAddr);
 
 static struct port_entry {
     int proto;
@@ -433,115 +412,6 @@ UPnPPortStatus UPnPCheckPort(struct UPNPUrls* urls, struct IGDdatas* data, int p
     }
 }
 
-bool STUNFindWanAddress(PSOCKADDR_IN wanAddr)
-{
-    SOCKET s;
-
-    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (s == INVALID_SOCKET) {
-        printf("socket() failed: %d\n", WSAGetLastError());
-        return false;
-    }
-
-    struct hostent *host;
-
-    host = gethostbyname("stun.stunprotocol.org");
-    if (host == nullptr) {
-        printf("gethostbyname() failed\n");
-        closesocket(s);
-        return false;
-    }
-
-    SOCKADDR_IN sin = {};
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(3478);
-    sin.sin_addr = *(struct in_addr*)host->h_addr;
-    int err = connect(s, (struct sockaddr*)&sin, sizeof(sin));
-    if (err == SOCKET_ERROR) {
-        printf("connect() failed: %d\n", WSAGetLastError());
-        closesocket(s);
-        return false;
-    }
-
-    STUN_MESSAGE reqMsg;
-    reqMsg.messageType = htons(STUN_MESSAGE_BINDING_REQUEST);
-    reqMsg.messageLength = 0;
-    reqMsg.magicCookie = htonl(STUN_MESSAGE_COOKIE);
-    for (int i = 0; i < ARRAYSIZE(reqMsg.transactionId); i++) {
-        rand_s(&reqMsg.transactionId[i]);
-    }
-
-    err = send(s, (char *)&reqMsg, sizeof(reqMsg), 0);
-    if (err == SOCKET_ERROR) {
-        printf("send() failed: %d\n", WSAGetLastError());
-        closesocket(s);
-        return false;
-    }
-
-    union {
-        struct {
-            STUN_MESSAGE respMsg;
-            STUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE mappedAddress;
-        };
-        char respBuf[128];
-    };
-
-    int bytesRead = recv(s, respBuf, sizeof(respBuf), 0);
-    if (bytesRead == SOCKET_ERROR) {
-        printf("recv() failed: %d\n", WSAGetLastError());
-        closesocket(s);
-        return false;
-    }
-    else if (bytesRead < sizeof(respMsg)) {
-        printf("STUN message truncated: %d\n", bytesRead);
-        closesocket(s);
-        return false;
-    }
-
-    closesocket(s);
-
-    if (htonl(respMsg.magicCookie) != STUN_MESSAGE_COOKIE) {
-        printf("Bad STUN cookie value: %x\n", htonl(respMsg.magicCookie));
-        return false;
-    }
-    else if (!RtlEqualMemory(reqMsg.transactionId, respMsg.transactionId, sizeof(reqMsg.transactionId))) {
-        printf("STUN transaction ID mismatch\n");
-        return false;
-    }
-    else if (htons(respMsg.messageType) != STUN_MESSAGE_BINDING_SUCCESS) {
-        printf("STUN message type mismatch: %x\n", htons(respMsg.messageType));
-        return false;
-    }
-    else if (bytesRead < sizeof(respMsg) + sizeof(mappedAddress)) {
-        printf("STUN message too short: %d\n", bytesRead);
-        return false;
-    }
-    else if (htons(mappedAddress.attributeType) != STUN_ATTRIBUTE_MAPPED_ADDRESS &&
-        htons(mappedAddress.attributeType) != STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS) {
-        printf("STUN attribute type mismatch: %x\n", htons(mappedAddress.attributeType));
-        return false;
-    }
-    else if (htons(mappedAddress.attributeLength) != 8) {
-        printf("STUN address length mismatch: %d\n", htons(mappedAddress.attributeLength));
-        return false;
-    }
-    else if (mappedAddress.addressFamily != 1) {
-        printf("STUN address family mismatch: %x\n", mappedAddress.addressFamily);
-        return false;
-    }
-
-    if (htons(mappedAddress.attributeType) == STUN_ATTRIBUTE_MAPPED_ADDRESS) {
-        // The address is directly encoded
-        wanAddr->sin_addr.S_un.S_addr = mappedAddress.address;
-    }
-    else {
-        // The address is XORed
-        wanAddr->sin_addr.S_un.S_addr = mappedAddress.address ^ respMsg.magicCookie;
-    }
-
-    return true;
-}
-
 bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* foundPortForwardingRules, bool* igdDisconnected)
 {
     natpmp_t natpmp;
@@ -648,7 +518,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     }
 
     printf("Detecting WAN IP address via STUN...");
-    if (!STUNFindWanAddress(wanAddr)) {
+    if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr)) {
         if (!gotReportedWanAddress) {
             DisplayMessage("Unable to determine your public IP address. Please check your Internet connection.");
             return false;

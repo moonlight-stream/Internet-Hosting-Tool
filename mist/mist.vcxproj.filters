@@ -18,6 +18,9 @@
     <ClCompile Include="mist.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="stun.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\version.h">
