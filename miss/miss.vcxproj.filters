@@ -18,6 +18,9 @@
     <ClCompile Include="miss.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="miss.rc">

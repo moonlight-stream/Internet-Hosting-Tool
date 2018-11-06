@@ -162,6 +162,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="miss.cpp" />
+    <ClCompile Include="tracer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="miss.rc" />
