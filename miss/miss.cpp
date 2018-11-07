@@ -417,8 +417,41 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
 
         // It couldn't assign us the external port we requested and gave us an alternate external port.
         // We can't use this alternate mapping, so immediately release it.
-        sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport, 0, 0);
-        return false;
+        printf("Deleting unwanted NAT-PMP mapping %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", response.pnu.newportmapping.mappedpublicport);
+        err = sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport, 0, 0);
+        if (err < 0) {
+            printf("ERROR %d" NL, err);
+            return false;
+        }
+        else {
+            do {
+                fd_set fds;
+                struct timeval timeout;
+
+                FD_ZERO(&fds);
+                FD_SET(natpmp->s, &fds);
+
+                err = getnatpmprequesttimeout(natpmp, &timeout);
+                if (err != 0) {
+                    assert(err == 0);
+                    printf("WAIT FAILED: %d" NL, err);
+                    return false;
+                }
+
+                select(0, &fds, nullptr, nullptr, &timeout);
+
+                err = readnatpmpresponseorretry(natpmp, &response);
+            } while (err == NATPMP_TRYAGAIN);
+
+            if (err == 0) {
+                printf("DONE" NL);
+                return false;
+            }
+            else {
+                printf("FAILED %d" NL, err);
+                return false;
+            }
+        }
     }
     else {
         printf("OK (%d seconds remaining)" NL, response.pnu.newportmapping.lifetime);
