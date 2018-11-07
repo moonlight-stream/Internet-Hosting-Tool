@@ -304,16 +304,16 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
         return false;
     }
 
-    if (data.IPv6FC.controlurl[0] == 0) {
-        printf("IPv6 firewall control not supported by UPnP IGD!" NL);
-        return false;
-    }
-
     if (ipv6) {
         // Convert what is likely a IPv6 temporary address into
         // the stable IPv6 address for the same interface.
         if (ResolveStableIP6Address(myAddr)) {
             printf("Stable global IPv6 address is: %s" NL, myAddr);
+
+            if (data.IPv6FC.controlurl[0] == 0) {
+                printf("IPv6 firewall control not supported by UPnP IGD!" NL);
+                return false;
+            }
 
             int firewallEnabled;
             ret = UPNP_GetFirewallStatus(urls.controlURL_6FC, data.IPv6FC.servicetype, &firewallEnabled, &pinholeAllowed);
