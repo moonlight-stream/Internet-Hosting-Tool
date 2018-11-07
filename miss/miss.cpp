@@ -1,4 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -25,6 +26,9 @@
 
 #define NATPMP_STATICLIB
 #include <natpmp.h>
+
+bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount);
+struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address);
 
 #define NL "\n"
 
@@ -271,16 +275,16 @@ bool ResolveStableIP6Address(char* tmpAddr)
     return true;
 }
 
-bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
+bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* lanAddrOverride, char* wanAddr)
 {
     struct UPNPUrls urls;
     struct IGDdatas data;
-    char myAddr[128];
-    char wanAddr[128];
+    char localAddress[128];
+    char* portMappingInternalAddress;
     int pinholeAllowed = false;
     bool success = true;
 
-    int ret = UPNP_GetValidIGD(list, &urls, &data, myAddr, sizeof(myAddr));
+    int ret = UPNP_GetValidIGD(list, &urls, &data, localAddress, sizeof(localAddress));
     if (ret == 0) {
         printf("No UPnP device found!" NL);
         return false;
@@ -307,8 +311,8 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
     if (ipv6) {
         // Convert what is likely a IPv6 temporary address into
         // the stable IPv6 address for the same interface.
-        if (ResolveStableIP6Address(myAddr)) {
-            printf("Stable global IPv6 address is: %s" NL, myAddr);
+        if (ResolveStableIP6Address(localAddress)) {
+            printf("Stable global IPv6 address is: %s" NL, localAddress);
 
             if (data.IPv6FC.controlurl[0] == 0) {
                 printf("IPv6 firewall control not supported by UPnP IGD!" NL);
@@ -333,16 +337,28 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable)
         if (ret == UPNPCOMMAND_SUCCESS) {
             printf("UPnP IGD WAN address is: %s" NL, wanAddr);
         }
+        else {
+            // Empty string
+            *wanAddr = 0;
+        }
+    }
+
+    // We may be mapping on behalf of another device
+    if (lanAddrOverride != nullptr) {
+        portMappingInternalAddress = lanAddrOverride;
+    }
+    else {
+        portMappingInternalAddress = localAddress;
     }
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
         if (!ipv6) {
-            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, myAddr, k_Ports[i].port, enable)) {
+            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable)) {
                 success = false;
             }
         }
         if (pinholeAllowed) {
-            UPnPCreatePinholeForPort(&urls, &data, k_Ports[i].proto, myAddr, k_Ports[i].port);
+            UPnPCreatePinholeForPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port);
         }
     }
 
@@ -417,7 +433,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
 
         // It couldn't assign us the external port we requested and gave us an alternate external port.
         // We can't use this alternate mapping, so immediately release it.
-        printf("Deleting unwanted NAT-PMP mapping %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", response.pnu.newportmapping.mappedpublicport);
+        printf("Deleting unwanted NAT-PMP mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", response.pnu.newportmapping.mappedpublicport);
         err = sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport, 0, 0);
         if (err < 0) {
             printf("ERROR %d" NL, err);
@@ -444,7 +460,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
             } while (err == NATPMP_TRYAGAIN);
 
             if (err == 0) {
-                printf("DONE" NL);
+                printf("OK" NL);
                 return false;
             }
             else {
@@ -489,14 +505,18 @@ bool IsGameStreamEnabled()
     }
 }
 
-void UpdatePortMappings(bool enable)
+void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* internalAddressIP4, char* upstreamAddressIP4)
 {
     natpmp_t natpmp;
     bool tryNatPmp = true;
+    char upstreamAddrNatPmp[128] = {};
+    char upstreamAddrUPnP[128] = {};
 
-    printf("Starting port mapping update..." NL);
+    printf("Starting port mapping update on %s to %s..." NL,
+        targetAddressIP4 ? targetAddressIP4 : "default gateway",
+        internalAddressIP4 ? internalAddressIP4 : "local machine");
 
-    int natPmpErr = initnatpmp(&natpmp, 0, 0);
+    int natPmpErr = initnatpmp(&natpmp, targetAddressIP4 ? 1 : 0, targetAddressIP4 ? inet_addr(targetAddressIP4) : 0);
     if (natPmpErr != 0) {
         printf("initnatpmp() failed: %d" NL, natPmpErr);
     }
@@ -512,18 +532,27 @@ void UpdatePortMappings(bool enable)
 
     {
         int upnpErr;
-        struct UPNPDev* ipv4Devs = upnpDiscoverAll(UPNP_DISCOVERY_DELAY_MS, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 0, 2, &upnpErr);
+        struct UPNPDev* ipv4Devs;
+        
+        if (targetAddressIP4 == nullptr) {
+            // If we have no target, use discovery to find the first hop
+            ipv4Devs = upnpDiscoverAll(UPNP_DISCOVERY_DELAY_MS, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 0, 2, &upnpErr);
+            printf("UPnP IPv4 IGD discovery completed with error code: %d" NL, upnpErr);
+        }
+        else {
+            // We have a specified target, so do discovery against that directly (may be outside our subnet in case of double-NAT)
+            struct in_addr addr;
+            addr.S_un.S_addr = inet_addr(targetAddressIP4);
+            ipv4Devs = getUPnPDevicesByAddress(addr);
+        }
 
-        printf("UPnP IPv4 IGD discovery completed with error code: %d" NL, upnpErr);
-
-        // Use the delay of upnpDiscoverAll() to also allow the NAT-PMP endpoint time to respond
+        // Use the delay of discovery to also allow the NAT-PMP endpoint time to respond
         if (natPmpErr >= 0) {
             natpmpresp_t response;
             natPmpErr = readnatpmpresponseorretry(&natpmp, &response);
             if (natPmpErr == 0) {
-                char addrStr[64];
-                inet_ntop(AF_INET, &response.pnu.publicaddress.addr, addrStr, sizeof(addrStr));
-                printf("NAT-PMP WAN address is: %s" NL, addrStr);
+                inet_ntop(AF_INET, &response.pnu.publicaddress.addr, upstreamAddrNatPmp, sizeof(upstreamAddrNatPmp));
+                printf("NAT-PMP upstream address is: %s" NL, upstreamAddrNatPmp);
             }
             else {
                 printf("NAT-PMP public address request failed: %d" NL, natPmpErr);
@@ -532,7 +561,7 @@ void UpdatePortMappings(bool enable)
         }
 
         // Don't try NAT-PMP if UPnP succeeds
-        if (UPnPHandleDeviceList(ipv4Devs, false, enable)) {
+        if (UPnPHandleDeviceList(ipv4Devs, false, enable, internalAddressIP4, upstreamAddrUPnP)) {
             printf("UPnP IPv4 port mapping successful" NL);
             if (enable) {
                 // We still want to try NAT-PMP if we're removing
@@ -546,14 +575,17 @@ void UpdatePortMappings(bool enable)
 
     fflush(stdout);
 
-    {
+    // Only run IPv6 UPnP discovery on the first hop
+    if (targetAddressIP4 == nullptr) {
         int upnpErr;
         struct UPNPDev* ipv6Devs = upnpDiscoverAll(UPNP_DISCOVERY_DELAY_MS, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 1, 2, &upnpErr);
+        char ipv6WanAddr[128] = {};
 
         printf("UPnP IPv6 IGD discovery completed with error code: %d" NL, upnpErr);
 
         // Ignore whether IPv6 succeeded when decided to use NAT-PMP
-        UPnPHandleDeviceList(ipv6Devs, true, enable);
+
+        UPnPHandleDeviceList(ipv6Devs, true, enable, nullptr, ipv6WanAddr);
 
         freeUPNPDevlist(ipv6Devs);
     }
@@ -574,6 +606,98 @@ void UpdatePortMappings(bool enable)
         }
 
         closenatpmp(&natpmp);
+    }
+
+    // Write this at the end to avoid clobbering an input parameter
+    if (upstreamAddrNatPmp[0] != 0 && inet_addr(upstreamAddrNatPmp) != 0) {
+        printf("Using NAT-PMP upstream IPv4 address: %s" NL, upstreamAddrNatPmp);
+        strcpy(upstreamAddressIP4, upstreamAddrNatPmp);
+    }
+    else if (upstreamAddrUPnP[0] != 0 && inet_addr(upstreamAddrUPnP) != 0) {
+        printf("Using UPnP upstream IPv4 address: %s" NL, upstreamAddrUPnP);
+        strcpy(upstreamAddressIP4, upstreamAddrUPnP);
+    }
+    else {
+        printf("No valid upstream IPv4 address found!" NL);
+        upstreamAddressIP4[0] = 0;
+    }
+}
+
+bool IsLikelyNAT(unsigned long netByteOrderAddr)
+{
+    DWORD addr = htonl(netByteOrderAddr);
+
+    // 10.0.0.0/8
+    if ((addr & 0xFF000000) == 0x0A000000) {
+        return true;
+    }
+    // 172.16.0.0/12
+    else if ((addr & 0xFFF00000) == 0xAC100000) {
+        return true;
+    }
+    // 192.168.0.0/16
+    else if ((addr & 0xFFFF0000) == 0xC0A80000) {
+        return true;
+    }
+    // 100.64.0.0/10 - RFC6598 official CGN address
+    else if ((addr & 0xFFC0) == 0x64400000) {
+        return true;
+    }
+
+    return false;
+}
+
+void UpdatePortMappings(bool enable)
+{
+    IN_ADDR hops[4];
+    int hopCount = ARRAYSIZE(hops);
+    char upstreamAddrStr[128];
+    unsigned long upstreamAddr;
+
+    printf("Finding upstream IPv4 hops via traceroute..." NL);
+    if (!getHopsIP4(hops, &hopCount)) {
+        hopCount = 0;
+    }
+    else {
+        printf("Found %d hops" NL, hopCount);
+    }
+
+    // Start at hop 1 since we don't want to count the default gateway
+    int nextHopIndex = 1;
+
+    // Start by probing for the default gateway
+    UpdatePortMappingsForTarget(enable, nullptr, nullptr, upstreamAddrStr);
+    while (upstreamAddrStr[0] != 0 && (upstreamAddr = inet_addr(upstreamAddrStr)) != 0) {
+        // We got an upstream address. Let's check if this is a NAT
+        if (IsLikelyNAT(upstreamAddr)) {
+            printf("Upstream address %s is likely a NAT" NL, upstreamAddrStr);
+
+            if (nextHopIndex >= hopCount) {
+                printf("Traceroute didn't reach this hop! Aborting!" NL);
+                break;
+            }
+
+            if (!enable) {
+                printf("Skipping hop traversal with GameStream disabled" NL);
+                break;
+            }
+
+            char targetAddress[128];
+            inet_ntop(AF_INET, &hops[nextHopIndex], targetAddress, sizeof(targetAddress));
+
+            // It's a NAT, so let's direct our UPnP/NAT-PMP messages to it.
+            // The internal IP address for the new mapping will be the upstream address of the last one.
+            // The target IP address to which to send the UPnP/NAT-PMP is the next hop of the traceroute.
+            UpdatePortMappingsForTarget(enable, targetAddress, upstreamAddrStr, upstreamAddrStr);
+        }
+        else {
+            // If we reach a proper public IP address, we're done
+            printf("Reached the Internet at hop %d" NL, nextHopIndex);
+            break;
+        }
+
+        // Next hop
+        nextHopIndex++;
     }
 
     fflush(stdout);
