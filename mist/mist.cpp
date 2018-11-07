@@ -320,8 +320,15 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
 bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
 {
     SOCKET s;
+    struct hostent* host;
 
     printf("Finding local IP address...");
+
+    host = gethostbyname("google.com");
+    if (host == nullptr) {
+        printf("gethostbyname() failed: %d\n", WSAGetLastError());
+        return false;
+    }
 
     s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == INVALID_SOCKET) {
@@ -332,7 +339,7 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
     SOCKADDR_IN sin = {};
     sin.sin_family = AF_INET;
     sin.sin_port = htons(443);
-    sin.sin_addr.S_un.S_addr = inet_addr("8.8.8.8");
+    sin.sin_addr = *(struct in_addr*)host->h_addr;
     int err = connect(s, (struct sockaddr*)&sin, sizeof(sin));
     if (err == SOCKET_ERROR) {
         printf("connect() failed: %d\n", WSAGetLastError());
