@@ -70,12 +70,17 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
     u_long mode = 1;
     ioctlsocket(s, FIONBIO, &mode);
 
-    char responseBuffer[1024];
+    char responseBuffer[2048];
     struct UPNPDev* deviceList = nullptr;
     for (;;) {
         int bytesRead = recv(s, responseBuffer, sizeof(responseBuffer) - 1, 0);
         if (bytesRead == SOCKET_ERROR) {
-            if (WSAGetLastError() != WSAEWOULDBLOCK) {
+            if (WSAGetLastError() == WSAEMSGSIZE) {
+                // Skip packets larger than our buffer
+                printf("recv() message too large\n");
+                continue;
+            }
+            else if (WSAGetLastError() != WSAEWOULDBLOCK) {
                 printf("recv() failed: %d\n", WSAGetLastError());
             }
             break;
