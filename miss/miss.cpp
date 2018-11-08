@@ -318,21 +318,22 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* la
         if (ResolveStableIP6Address(localAddress)) {
             printf("Stable global IPv6 address is: %s" NL, localAddress);
 
-            if (data.IPv6FC.controlurl[0] == 0) {
-                printf("IPv6 firewall control not supported by UPnP IGD!" NL);
-                return false;
-            }
-
-            int firewallEnabled;
-            ret = UPNP_GetFirewallStatus(urls.controlURL_6FC, data.IPv6FC.servicetype, &firewallEnabled, &pinholeAllowed);
-            if (ret == UPNPCOMMAND_SUCCESS) {
-                printf("UPnP IPv6 firewall control available. Firewall is %s, pinhole is %s" NL,
-                    firewallEnabled ? "enabled" : "disabled",
-                    pinholeAllowed ? "allowed" : "disallowed");
+            // Don't try IPv6FC without a control URL
+            if (data.IPv6FC.controlurl[0] != 0) {
+                int firewallEnabled;
+                ret = UPNP_GetFirewallStatus(urls.controlURL_6FC, data.IPv6FC.servicetype, &firewallEnabled, &pinholeAllowed);
+                if (ret == UPNPCOMMAND_SUCCESS) {
+                    printf("UPnP IPv6 firewall control available. Firewall is %s, pinhole is %s" NL,
+                        firewallEnabled ? "enabled" : "disabled",
+                        pinholeAllowed ? "allowed" : "disallowed");
+                }
+                else {
+                    printf("UPnP IPv6 firewall control is unavailable with error %d (%s)" NL, ret, strupnperror(ret));
+                    pinholeAllowed = false;
+                }
             }
             else {
-                printf("UPnP IPv6 firewall control is unavailable with error %d (%s)" NL, ret, strupnperror(ret));
-                pinholeAllowed = false;
+                printf("IPv6 firewall control not supported by UPnP IGD!" NL);
             }
         }
     }
