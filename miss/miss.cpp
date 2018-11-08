@@ -606,6 +606,14 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
             tryNatPmp = false;
         }
 
+        // Don't try with NAT-PMP if the UPnP attempt for the same gateway failed due to being
+        // disconnected or some other error. This will avoid overwriting UPnP rules on a disconnected IGD
+        // with duplicate NAT-PMP rules. We want to allow deletion of NAT-PMP rules in any case though.
+        if (tryNatPmp && enable && !strcmp(upstreamAddrNatPmp, upstreamAddrNatPmp)) {
+            printf("Not attempting to use NAT-PMP to talk to the same UPnP gateway\n");
+            tryNatPmp = false;
+        }
+
         if (tryNatPmp) {
             bool success = true;
             for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
