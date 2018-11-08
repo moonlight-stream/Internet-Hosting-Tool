@@ -132,6 +132,8 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
         deviceList = newDev;
     }
 
+    closesocket(s);
+
     return deviceList;
 }
 
