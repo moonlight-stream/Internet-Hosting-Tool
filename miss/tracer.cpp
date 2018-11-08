@@ -94,11 +94,22 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
         char* protocol = strtok(responseBuffer, " ");
         char* statusCodeStr = strtok(nullptr, " ");
         char* statusMessage = strtok(nullptr, "\r");
-        if (_stricmp(protocol, "HTTP/1.0") && _stricmp(protocol, "HTTP/1.1")) {
+
+        // Check for a valid response header
+        if (protocol == nullptr) {
+            printf("Missing protocol in SSDP header\n");
+            continue;
+        }
+        else if (statusCodeStr == nullptr) {
+            printf("Missing status code in SSDP header\n");
+            continue;
+        }
+        // FIXME: Should we require statusMessage too?
+        else if (_stricmp(protocol, "HTTP/1.0") && _stricmp(protocol, "HTTP/1.1")) {
             printf("Unexpected protocol: %s\n", protocol);
             continue;
         }
-        if (atoi(statusCodeStr) != 200) {
+        else if (atoi(statusCodeStr) != 200) {
             printf("Unexpected status: %s %s\n", statusCodeStr, statusMessage);
             continue;
         }
@@ -109,6 +120,10 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
         char* st = nullptr;
         while (char* headerName = strtok(nullptr, "\r\n:")) {
             char* headerValue = strtok(nullptr, "\r");
+            if (headerValue == nullptr) {
+                printf("Unexpected end of SSDP header\n");
+                break;
+            }
 
             // Skip leading spaces
             while (*headerValue == ' ') headerValue++;
