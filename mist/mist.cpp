@@ -555,7 +555,7 @@ bool IsPossibleCGN(PSOCKADDR_IN wanAddr)
         return true;
     }
     // 100.64.0.0/10 - RFC6598 official CGN address
-    else if ((addr & 0xFFC0) == 0x64400000) {
+    else if ((addr & 0xFFC00000) == 0x64400000) {
         return true;
     }
 
