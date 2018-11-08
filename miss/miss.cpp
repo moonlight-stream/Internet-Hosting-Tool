@@ -141,19 +141,23 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
             printf("CONFLICT: %s %s" NL, intClient, desc);
 
             // Some UPnP IGDs won't let unauthenticated clients delete other conflicting port mappings
-            // for security reasons, but we will give it a try anyway.
-            printf("Trying to delete conflicting UPnP mapping for %s %s -> %s...", protoStr, portStr, intClient);
-            err = UPNP_DeletePortMapping(urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr);
-            if (err == UPNPCOMMAND_SUCCESS) {
-                printf("OK" NL);
-            }
-            else if (err == 606) {
-                printf("UNAUTHORIZED" NL);
-                return false;
-            }
-            else {
-                printf("ERROR %d" NL, err);
-                return false;
+            // for security reasons, but we will give it a try anyway. If GameStream is not enabled,
+            // we will leave the conflicting entry alone to avoid disturbing another PC's port forwarding
+            // (especially if we're double NATed).
+            if (enable) {
+                printf("Trying to delete conflicting UPnP mapping for %s %s -> %s...", protoStr, portStr, intClient);
+                err = UPNP_DeletePortMapping(urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr);
+                if (err == UPNPCOMMAND_SUCCESS) {
+                    printf("OK" NL);
+                }
+                else if (err == 606) {
+                    printf("UNAUTHORIZED" NL);
+                    return false;
+                }
+                else {
+                    printf("ERROR %d" NL, err);
+                    return false;
+                }
             }
         }
     }
@@ -593,6 +597,14 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
     fflush(stdout);
 
     if (natPmpErr == 0) {
+        // NAT-PMP has no description field or other token that we can use to determine
+        // if we created the rules we'd be deleting. Since we don't have that, we can't
+        // safely remove mappings that could be shared by another machine behind a double NAT.
+        if (!enable && targetAddressIP4 != nullptr) {
+            printf("Not removing upstream NAT-PMP mappings on non-default gateway device" NL);
+            tryNatPmp = false;
+        }
+
         if (tryNatPmp) {
             bool success = true;
             for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
@@ -674,11 +686,6 @@ void UpdatePortMappings(bool enable)
 
             if (nextHopIndex >= hopCount) {
                 printf("Traceroute didn't reach this hop! Aborting!" NL);
-                break;
-            }
-
-            if (!enable) {
-                printf("Skipping hop traversal with GameStream disabled" NL);
                 break;
             }
 
