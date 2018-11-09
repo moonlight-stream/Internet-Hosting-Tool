@@ -659,12 +659,6 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (igdDisconnected) {
-        DisplayMessage("Your router reports to be disconnected from the Internet. Make sure UPnP is enabled in your router settings. "
-            "If this message persists, make sure your router isn't connected to the Internet through another router. If it is, switch one of the routers to bridge/AP mode.\n\n"
-            "Just in case this warning is due to a buggy router, the test will continue anyway.", MpWarn, false);
-    }
-
     // Detect a double NAT by detecting STUN and and UPnP mismatches
     if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
         printf("Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
@@ -685,7 +679,7 @@ int main(int argc, char* argv[])
     printf("Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         if (IsDoubleNAT(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. This configuration breaks port forwarding. To resolve this, switch one of the routers into bridge/AP mode.");
+            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Make sure both routers have UPnP enabled, or better yet, switch one of the routers into bridge/AP mode.");
             DisplayMessage(msgBuf);
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
@@ -697,8 +691,9 @@ int main(int argc, char* argv[])
             DisplayMessage(msgBuf);
         }
         else if (upnpRulesFound) {
-            snprintf(msgBuf, sizeof(msgBuf), "We found the correct UPnP rules, but we couldn't confirm that they are working. You can try streaming from a different network by typing the following address into Moonlight's Add PC dialog: %s\n\n"
-                "If that doesn't work, check your router settings for any existing Moonlight port forwarding entries and delete them.", wanAddrStr);
+            snprintf(msgBuf, sizeof(msgBuf), "We found the correct UPnP rules, but we couldn't confirm that they are working. Depending on your router, it may only work when connecting from a different network.\n\n"
+                "You can try streaming from a different network (like cellular data or tethering) by typing the following address into Moonlight's Add PC dialog: %s\n\n"
+                "If that doesn't work, check your router settings for any existing Moonlight port forwarding entries and delete them or try restarting your router.", wanAddrStr);
             DisplayMessage(msgBuf, MpWarn);
         }
         else {
