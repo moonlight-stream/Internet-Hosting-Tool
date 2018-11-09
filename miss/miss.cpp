@@ -29,6 +29,7 @@
 
 bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount);
 struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address);
+bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable);
 
 #define NL "\n"
 
@@ -514,6 +515,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
 {
     natpmp_t natpmp;
     bool tryNatPmp = true;
+    bool tryPcp = true;
     char upstreamAddrNatPmp[128] = {};
     char upstreamAddrUPnP[128] = {};
 
@@ -572,6 +574,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
                 // We still want to try NAT-PMP if we're removing
                 // rules to ensure any NAT-PMP rules get cleaned up
                 tryNatPmp = false;
+                tryPcp = false;
             }
         }
 
@@ -609,7 +612,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         // Don't try with NAT-PMP if the UPnP attempt for the same gateway failed due to being
         // disconnected or some other error. This will avoid overwriting UPnP rules on a disconnected IGD
         // with duplicate NAT-PMP rules. We want to allow deletion of NAT-PMP rules in any case though.
-        if (tryNatPmp && enable && !strcmp(upstreamAddrNatPmp, upstreamAddrNatPmp)) {
+        if (tryNatPmp && enable && !strcmp(upstreamAddrNatPmp, upstreamAddrUPnP)) {
             printf("Not attempting to use NAT-PMP to talk to the same UPnP gateway\n");
             tryNatPmp = false;
         }
@@ -623,10 +626,34 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
             }
             if (success) {
                 printf("NAT-PMP IPv4 port mapping successful" NL);
+                tryPcp = false;
             }
         }
 
         closenatpmp(&natpmp);
+    }
+
+    // Try PCP for IPv4 if UPnP and NAT-PMP have both failed for the non-default gateway router.
+    // This may be the case for CGN that only supports PCP.
+    if (tryPcp && targetAddressIP4 != nullptr && internalAddressIP4 != nullptr) {
+        SOCKADDR_IN targetAddr = {};
+        SOCKADDR_IN internalAddr = {};
+        targetAddr.sin_family = AF_INET;
+        targetAddr.sin_addr.S_un.S_addr = inet_addr(targetAddressIP4);
+        internalAddr.sin_family = AF_INET;
+        internalAddr.sin_addr.S_un.S_addr = inet_addr(internalAddressIP4);
+
+        bool success = true;
+        for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
+            if (!PCPMapPort((PSOCKADDR_STORAGE)&internalAddr, sizeof(internalAddr),
+                (PSOCKADDR_STORAGE)&targetAddr, sizeof(targetAddr),
+                k_Ports[i].proto, k_Ports[i].port, enable)) {
+                success = false;
+            }
+        }
+        if (success) {
+            printf("PCP IPv4 port mapping successful" NL);
+        }
     }
 
     // Write this at the end to avoid clobbering an input parameter

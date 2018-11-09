@@ -132,13 +132,6 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     }
 
     // This is safe for SOCKADDR_IN and SOCKADDR_IN6
-    ((PSOCKADDR_IN)localAddr)->sin_port = 0;
-    if (bind(sock, (struct sockaddr*)localAddr, localAddrLen) == SOCKET_ERROR) {
-        printf("bind() failed: %d\n", WSAGetLastError());
-        closesocket(sock);
-        return false;
-    }
-
     ((PSOCKADDR_IN)pcpAddr)->sin_port = htons(5351);
     if (connect(sock, (struct sockaddr*)pcpAddr, pcpAddrLen) == SOCKET_ERROR) {
         printf("connect() failed: %d\n", WSAGetLastError());
