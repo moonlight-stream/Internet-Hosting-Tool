@@ -131,7 +131,17 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         return false;
     }
 
-    // This is safe for SOCKADDR_IN and SOCKADDR_IN6
+    if (localAddr->ss_family == AF_INET6) {
+        // Make sure we're sourcing from the correct IPv6 address to ensure the port
+        // is opened correctly and that the PCP server doesn't refuse our mapping.
+        ((PSOCKADDR_IN6)localAddr)->sin6_port = 0;
+        if (bind(sock, (struct sockaddr*)localAddr, localAddrLen) == SOCKET_ERROR) {
+            printf("bind() failed: %d\n", WSAGetLastError());
+            closesocket(sock);
+            return false;
+        }
+    }
+
     ((PSOCKADDR_IN)pcpAddr)->sin_port = htons(5351);
     if (connect(sock, (struct sockaddr*)pcpAddr, pcpAddrLen) == SOCKET_ERROR) {
         printf("connect() failed: %d\n", WSAGetLastError());
@@ -220,6 +230,9 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         switch (resp.hdr.hdr.result) {
         case 1: // UNSUPP_VERSION
             printf("UNSUPPORTED\n");
+            break;
+        case 2: // NOT_AUTHORIZED
+            printf("UNAUTHORIZED\n");
             break;
         case 11: // CANNOT_PROVIDE_EXTERNAL
             printf("CONFLICT\n");
