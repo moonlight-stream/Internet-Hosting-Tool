@@ -8,6 +8,9 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 
+#pragma comment(lib, "Shlwapi.lib")
+#include <shlwapi.h>
+
 #include <assert.h>
 #include <stdio.h>
 
@@ -48,7 +51,7 @@ typedef struct _PCP_OPTION_HEADER {
 typedef struct _PCP_MAP_REQUEST {
     PCP_REQUEST_HEADER hdr;
 
-    int mappingNonce[3];
+    unsigned char mappingNonce[12];
     unsigned char protocol;
     unsigned char reserved[3];
     unsigned short internalPort;
@@ -62,7 +65,7 @@ typedef struct _PCP_MAP_REQUEST {
 typedef struct _PCP_MAP_RESPONSE {
     PCP_RESPONSE_HEADER hdr;
 
-    int mappingNonce[3];
+    unsigned char mappingNonce[12];
     unsigned char protocol;
     unsigned char reserved[3];
     unsigned short internalPort;
@@ -71,6 +74,23 @@ typedef struct _PCP_MAP_RESPONSE {
 } PCP_MAP_RESPONSE, *PPCP_MAP_RESPONSE;
 
 #pragma pack(pop)
+
+static void populateMappingNonce(PPCP_MAP_REQUEST request, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen)
+{
+    struct {
+        unsigned short port;
+        unsigned char localAddress[16];
+        SOCKADDR_STORAGE targetAddress;
+    } dataToHash;
+
+    assert(request->internalPort != 0);
+
+    dataToHash.port = request->internalPort;
+    memcpy(dataToHash.localAddress, request->hdr.localAddress, sizeof(dataToHash.localAddress));
+    memcpy(&dataToHash.targetAddress, pcpAddr, pcpAddrLen);
+
+    HashData((BYTE*)&dataToHash, 18 + pcpAddrLen, request->mappingNonce, sizeof(request->mappingNonce));
+}
 
 static void populateAddressFromSockAddr(PSOCKADDR_STORAGE sockAddr, unsigned char* address)
 {
@@ -132,9 +152,6 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     reqMsg.hdr.lifetime = htonl(enable ? 3600 : 0);
     populateAddressFromSockAddr(localAddr, reqMsg.hdr.localAddress);
 
-    for (int i = 0; i < ARRAYSIZE(reqMsg.mappingNonce); i++) {
-        reqMsg.mappingNonce[i] = rand();
-    }
     reqMsg.protocol = proto;
     reqMsg.internalPort = htons(port);
     reqMsg.externalPort = htons(port);
@@ -153,6 +170,9 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         // We don't append PREFER_FAILURE for an unmap request
         reqMsgLen = sizeof(reqMsg) - sizeof(reqMsg.preferFailureOption);
     }
+
+    // This must be done after the rest of the message is populated
+    populateMappingNonce(&reqMsg, pcpAddr, pcpAddrLen);
 
     bytesRead = SOCKET_ERROR;
     for (i = 0; i < RECV_TIMEOUT_SEC; i++) {
@@ -212,7 +232,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
             printf("CONFLICT\n");
             break;
         default:
-            printf("PCP request failed: %d\n", resp.hdr.hdr.result);
+            printf("ERROR: %d\n", resp.hdr.hdr.result);
             break;
         }
         goto fail;
@@ -232,12 +252,9 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     else if (reqMsg.externalPort != resp.hdr.externalPort) {
         printf("PCP returned different external port: %d wanted %d\n", htons(resp.hdr.externalPort), htons(reqMsg.externalPort));
         if (enable) {
-            // Clear the port mapping by modifying and resending the old request
+            // Clear the port mapping by modifying and resending the old request (with the same nonce)
             reqMsg.hdr.lifetime = 0;
             reqMsg.externalPort = resp.hdr.externalPort;
-            for (int i = 0; i < ARRAYSIZE(reqMsg.mappingNonce); i++) {
-                reqMsg.mappingNonce[i] = rand();
-            }
             reqMsgLen = sizeof(reqMsg) - sizeof(reqMsg.preferFailureOption);
             if (send(sock, (char*)&reqMsg, reqMsgLen, 0) == SOCKET_ERROR) {
                 printf("Failed to unmap unexpected external port: %d\n", WSAGetLastError());
@@ -247,7 +264,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     }
 
     if (enable) {
-        printf("OK\n");
+        printf("OK (%d seconds remaining)\n", ntohl(resp.hdr.hdr.lifetime));
     }
     else {
         printf("DELETED\n");
