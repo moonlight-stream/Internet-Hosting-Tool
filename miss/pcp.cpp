@@ -188,7 +188,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     // This must be done after the rest of the message is populated
     populateMappingNonce(&reqMsg, pcpAddr, pcpAddrLen);
 
-    bytesRead = SOCKET_ERROR;
+    bytesRead = 0;
     for (i = 0; i < RECV_TIMEOUT_SEC; i++) {
         // Retransmit the request every second until the timeout elapses
         if (send(sock, (char *)&reqMsg, reqMsgLen, 0) == SOCKET_ERROR) {
@@ -222,7 +222,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     }
 
     if (bytesRead == 0) {
-        printf("No response from PCP server\n");
+        printf("NO RESPONSE\n");
         goto fail;
     }
     else if (bytesRead == SOCKET_ERROR) {

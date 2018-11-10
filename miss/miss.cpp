@@ -711,9 +711,13 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         // Don't try with NAT-PMP if the UPnP attempt for the same gateway failed due to being
         // disconnected or some other error. This will avoid overwriting UPnP rules on a disconnected IGD
         // with duplicate NAT-PMP rules. We want to allow deletion of NAT-PMP rules in any case though.
-        if (tryNatPmp && enable && !strcmp(upstreamAddrNatPmp, upstreamAddrUPnP)) {
-            printf("Not attempting to use NAT-PMP to talk to the same UPnP gateway\n");
+        if (enable && !strcmp(upstreamAddrNatPmp, upstreamAddrUPnP)) {
+            printf("Not attempting to use NAT-PMP/PCP to talk to the same UPnP gateway\n");
             tryNatPmp = false;
+
+            // We have both UPnP and NAT-PMP on the same upstream gateway, so let's
+            // assume PCP is on the same box too.
+            tryPcp = false;
         }
 
         if (tryNatPmp) {
@@ -737,7 +741,12 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
 
             if (success) {
                 printf("NAT-PMP IPv4 port mapping successful" NL);
-                tryPcp = false;
+
+                // Always try all possibilities when disabling to ensure
+                // we completely clean up
+                if (enable) {
+                    tryPcp = false;
+                }
             }
         }
 
@@ -835,8 +844,9 @@ void UpdatePortMappings(bool enable)
         printf("Found %d hops" NL, hopCount);
     }
 
-    // Start at hop 1 since we don't want to count the default gateway
-    int nextHopIndex = 1;
+    // getHopsIP4() already skips the default gateway, so 0
+    // is actually the first hop after the default gateway
+    int nextHopIndex = 0;
 
     // Start by probing for the default gateway
     UpdatePortMappingsForTarget(enable, nullptr, nullptr, upstreamAddrStr);
@@ -990,7 +1000,7 @@ HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpConte
         ServiceStatus.dwControlsAccepted = 0;
         SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
 
-        printf("Removing UPnP/NAT-PMP rules after service stop request\n");
+        printf("Removing UPnP/NAT-PMP/PCP rules after service stop request\n");
         UpdatePortMappings(false);
 
         printf("The service is stopping\n");

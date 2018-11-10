@@ -157,6 +157,9 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
     return deviceList;
 }
 
+// Start at TTL 2 to skip contacting our default gateway
+#define TTL_START 2
+
 bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount)
 {
     HANDLE icmpFile;
@@ -179,8 +182,8 @@ bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount)
         return false;
     }
 
-    int ttl = 1;
-    for (; ttl < *hopAddressCount; ttl++)
+    int ttl;
+    for (ttl = TTL_START; ttl - TTL_START < *hopAddressCount; ttl++)
     {
         IP_OPTION_INFORMATION ipOptions;
 
@@ -206,19 +209,19 @@ bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount)
 
         if (replies[0].Status == IP_TTL_EXPIRED_TRANSIT) {
             // Get the IP address that responded to us
-            printf("Hop %d: %s\n", ttl, inet_ntoa(*(IN_ADDR*)&replies[0].Address));
-            hopAddress[ttl - 1] = *(IN_ADDR*)&replies[0].Address;
+            printf("Hop %d: %s\n", ttl - TTL_START, inet_ntoa(*(IN_ADDR*)&replies[0].Address));
+            hopAddress[ttl - TTL_START] = *(IN_ADDR*)&replies[0].Address;
         }
         else {
             // Bail on anything else
-            printf("Hop %d: %s (error %d)\n", ttl, inet_ntoa(*(IN_ADDR*)&replies[0].Address), replies[0].Status);
+            printf("Hop %d: %s (error %d)\n", ttl - TTL_START, inet_ntoa(*(IN_ADDR*)&replies[0].Address), replies[0].Status);
             break;
         }
     }
 
     IcmpCloseHandle(icmpFile);
 
-    *hopAddressCount = ttl - 1;
+    *hopAddressCount = ttl - TTL_START;
     return true;
 }
 
