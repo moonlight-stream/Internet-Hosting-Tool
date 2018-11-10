@@ -109,7 +109,7 @@ static void populateAddressFromSockAddr(PSOCKADDR_STORAGE sockAddr, unsigned cha
     }
 }
 
-bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable)
+bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable, bool indefinite)
 {
     SOCKET sock;
     PCP_MAP_REQUEST reqMsg;
@@ -120,6 +120,17 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         PCP_MAP_RESPONSE hdr;
         char buf[1024];
     } resp;
+    int lifetime;
+
+    if (!enable) {
+        lifetime = 0;
+    }
+    else if (indefinite) {
+        lifetime = 604800; // 1 week
+    }
+    else {
+        lifetime = 3600;
+    }
 
     assert(localAddr->ss_family == pcpAddr->ss_family);
 
@@ -152,7 +163,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     reqMsg = {};
     reqMsg.hdr.version = PCP_VERSION;
     reqMsg.hdr.opcode = OPCODE_MAP_REQUEST;
-    reqMsg.hdr.lifetime = htonl(enable ? 3600 : 0);
+    reqMsg.hdr.lifetime = htonl(lifetime);
     populateAddressFromSockAddr(localAddr, reqMsg.hdr.localAddress);
 
     reqMsg.protocol = proto;

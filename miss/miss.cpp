@@ -29,7 +29,7 @@
 
 bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount);
 struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address);
-bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable);
+bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable, bool indefinite);
 
 #define NL "\n"
 
@@ -53,6 +53,8 @@ static struct port_entry {
     {IPPROTO_UDP, 48010}
 };
 
+static const int k_WolPorts[] = { 7, 9 };
+
 void UPnPCreatePinholeForPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port)
 {
     char uniqueId[8];
@@ -74,7 +76,7 @@ void UPnPCreatePinholeForPort(struct UPNPUrls* urls, struct IGDdatas* data, int 
     }
 }
 
-bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable)
+bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite)
 {
     char intClient[16];
     char intPort[6];
@@ -172,12 +174,13 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     }
 
     // Create or update the expiration time of an existing mapping
-    snprintf(leaseDuration, sizeof(leaseDuration), "%d", PORT_MAPPING_DURATION_SEC);
+    snprintf(leaseDuration, sizeof(leaseDuration), "%d",
+        indefinite ? 0 : PORT_MAPPING_DURATION_SEC);
     printf("Updating UPnP port mapping for %s %s -> %s...", protoStr, portStr, myAddr);
     err = UPNP_AddPortMapping(
         urls->controlURL, data->first.servicetype, portStr,
         portStr, myAddr, myDesc, protoStr, nullptr, leaseDuration);
-    if (err == 725) { // OnlyPermanentLeasesSupported
+    if (err == 725 && !indefinite) { // OnlyPermanentLeasesSupported
         err = UPNP_AddPortMapping(
             urls->controlURL, data->first.servicetype, portStr,
             portStr, myAddr, myDesc, protoStr, nullptr, "0");
@@ -280,6 +283,59 @@ bool ResolveStableIP6Address(char* tmpAddr)
     return true;
 }
 
+bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
+{
+    union {
+        IP_ADAPTER_ADDRESSES addresses;
+        char buffer[8192];
+    };
+    ULONG error;
+    ULONG length;
+    PIP_ADAPTER_ADDRESSES currentAdapter;
+    PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
+    in_addr targetAddress;
+
+    inet_pton(AF_INET, lanAddressString, &targetAddress);
+
+    // Get a list of all interfaces with IPv4 addresses on the system
+    length = sizeof(buffer);
+    error = GetAdaptersAddresses(AF_INET,
+        GAA_FLAG_SKIP_ANYCAST |
+        GAA_FLAG_SKIP_MULTICAST |
+        GAA_FLAG_SKIP_DNS_SERVER |
+        GAA_FLAG_SKIP_FRIENDLY_NAME,
+        NULL,
+        &addresses,
+        &length);
+    if (error != ERROR_SUCCESS) {
+        printf("GetAdaptersAddresses() failed: %d" NL, error);
+        return false;
+    }
+
+    currentAdapter = &addresses;
+    currentAddress = nullptr;
+    while (currentAdapter != nullptr) {
+        currentAddress = currentAdapter->FirstUnicastAddress;
+        while (currentAddress != nullptr) {
+            assert(currentAddress->Address.lpSockaddr->sa_family == AF_INET);
+
+            PSOCKADDR_IN currentAddrV4 = (PSOCKADDR_IN)currentAddress->Address.lpSockaddr;
+
+            if (RtlEqualMemory(&currentAddrV4->sin_addr, &targetAddress, sizeof(targetAddress))) {
+                *prefixLength = currentAddress->OnLinkPrefixLength;
+                return true;
+            }
+
+            currentAddress = currentAddress->Next;
+        }
+
+        currentAdapter = currentAdapter->Next;
+    }
+
+    printf("No adapter found with IPv4 address: %s" NL, lanAddressString);
+    return false;
+}
+
 bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* lanAddrOverride, char* wanAddr)
 {
     struct UPNPUrls urls;
@@ -359,7 +415,7 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* la
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
         if (!ipv6) {
-            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable)) {
+            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false)) {
                 success = false;
             }
         }
@@ -368,11 +424,42 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* la
         }
     }
 
+    // Do a best-effort for IPv4 Wake-on-LAN broadcast mappings
+    if (!ipv6) {
+        for (int i = 0; i < ARRAYSIZE(k_WolPorts); i++) {
+            if (lanAddrOverride == nullptr) {
+                // Map the port to the broadcast address (may not work on all routers). This
+                // ensures delivery even after the ARP entry for this PC times out on the router.
+                int onLinkPrefixLen;
+                if (GetIP4OnLinkPrefixLength(localAddress, &onLinkPrefixLen)) {
+                    int netmask = 0;
+                    for (int j = 0; j < onLinkPrefixLen; j++) {
+                        netmask |= (1 << j);
+                    }
+
+                    in_addr broadcastAddr;
+                    broadcastAddr.S_un.S_addr = inet_addr(localAddress);
+                    broadcastAddr.S_un.S_addr |= ~netmask;
+
+                    char broadcastAddrStr[128];
+                    inet_ntop(AF_INET, &broadcastAddr, broadcastAddrStr, sizeof(broadcastAddrStr));
+
+                    UPnPMapPort(&urls, &data, IPPROTO_UDP, broadcastAddrStr, k_WolPorts[i], enable, true);
+                }
+            }
+            else {
+                // When we're mapping the WOL ports upstream of our router, we map directly to
+                // the port on the upstream address (likely our router's WAN interface).
+                UPnPMapPort(&urls, &data, IPPROTO_UDP, lanAddrOverride, k_WolPorts[i], enable, true);
+            }
+        }
+    }
+
     FreeUPNPUrls(&urls);
     return success;
 }
 
-bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
+bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool indefinite)
 {
     int natPmpProto;
 
@@ -389,8 +476,20 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable)
         return false;
     }
 
+    int lifetime;
+
+    if (!enable) {
+        lifetime = 0;
+    }
+    else if (indefinite) {
+        lifetime = 604800; // 1 week
+    }
+    else {
+        lifetime = 3600;
+    }
+
     printf("Updating NAT-PMP port mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", port);
-    int err = sendnewportmappingrequest(natpmp, natPmpProto, port, enable ? port : 0, enable ? PORT_MAPPING_DURATION_SEC : 0);
+    int err = sendnewportmappingrequest(natpmp, natPmpProto, port, enable ? port : 0, lifetime);
     if (err < 0) {
         printf("ERROR %d" NL, err);
         return false;
@@ -620,10 +719,22 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         if (tryNatPmp) {
             bool success = true;
             for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-                if (!NATPMPMapPort(&natpmp, k_Ports[i].proto, k_Ports[i].port, enable)) {
+                if (!NATPMPMapPort(&natpmp, k_Ports[i].proto, k_Ports[i].port, enable, false)) {
                     success = false;
                 }
             }
+
+            // We can only map ports for the non-default gateway case because
+            // it will use our LAN address as the internal client address, which
+            // doesn't work (needs to be broadcast) for the last hop.
+            if (targetAddressIP4 != nullptr) {
+                // Best effort, don't care if we fail for WOL
+                for (int i = 0; i < ARRAYSIZE(k_WolPorts); i++) {
+                    // Indefinite mapping since we may not be awake to refresh it
+                    NATPMPMapPort(&natpmp, IPPROTO_UDP, k_WolPorts[i], enable, true);
+                }
+            }
+
             if (success) {
                 printf("NAT-PMP IPv4 port mapping successful" NL);
                 tryPcp = false;
@@ -647,10 +758,24 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
             if (!PCPMapPort((PSOCKADDR_STORAGE)&internalAddr, sizeof(internalAddr),
                 (PSOCKADDR_STORAGE)&targetAddr, sizeof(targetAddr),
-                k_Ports[i].proto, k_Ports[i].port, enable)) {
+                k_Ports[i].proto, k_Ports[i].port, enable, false)) {
                 success = false;
             }
         }
+
+        // We can only map ports for the non-default gateway case because
+        // it will use our internal address as the internal client address, which
+        // doesn't work (needs to be broadcast) for the last hop.
+        if (internalAddressIP4 != nullptr) {
+            // Best effort, don't care if we fail for WOL
+            for (int i = 0; i < ARRAYSIZE(k_WolPorts); i++) {
+                // Indefinite mapping since we may not be awake to refresh it
+                PCPMapPort((PSOCKADDR_STORAGE)&internalAddr, sizeof(internalAddr),
+                    (PSOCKADDR_STORAGE)&targetAddr, sizeof(targetAddr),
+                    IPPROTO_UDP, k_WolPorts[i], enable, true);
+            }
+        }
+
         if (success) {
             printf("PCP IPv4 port mapping successful" NL);
         }
