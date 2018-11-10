@@ -1,5 +1,5 @@
 # Moonlight Internet Streaming Helper
-* Enables Moonlight streaming over the Internet with no manual configuration required
+* Enable Moonlight streaming over the Internet with no configuration required
 * Troubleshoot streaming issues with the included testing tool
 
 # How to Use
