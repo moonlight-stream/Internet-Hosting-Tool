@@ -1,9 +1,9 @@
 # Moonlight Internet Streaming Helper
-* Enable Moonlight streaming over the Internet with no configuration required
+* Enable Moonlight streaming from your PC over the Internet with no configuration required
 * Troubleshoot streaming issues with the included testing tool
 
 # How to Use
-1. Install the MSI package from the [GitHub Releases Page](https://github.com/moonlight-stream/Internet-Streaming-Helper/releases)
+1. Install the MSI package from the [GitHub Releases Page](https://github.com/moonlight-stream/Internet-Streaming-Helper/releases) on your host gaming PC.
 2. If neccessary, run the Moonlight Internet Streaming Tester installed with this software.
 
 # Technical Features
