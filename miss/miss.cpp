@@ -55,27 +55,6 @@ static struct port_entry {
 
 static const int k_WolPorts[] = { 9 };
 
-void UPnPCreatePinholeForPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port)
-{
-    char uniqueId[8];
-    char protoStr[3];
-    char portStr[6];
-
-    snprintf(portStr, sizeof(portStr), "%d", port);
-    snprintf(protoStr, sizeof(protoStr), "%d", proto);
-
-    printf("Creating UPnP IPv6 pinhole for %s %s -> %s...", protoStr, portStr, myAddr);
-
-    // Lease time is in seconds - 7200 = 2 hours
-    int err = UPNP_AddPinhole(urls->controlURL_6FC, data->IPv6FC.servicetype, "empty", portStr, myAddr, portStr, protoStr, "7200", uniqueId);
-    if (err == UPNPCOMMAND_SUCCESS) {
-        printf("OK" NL);
-    }
-    else {
-        printf("ERROR %d (%s)" NL, err, strupnperror(err));
-    }
-}
-
 bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite)
 {
     char intClient[16];
@@ -196,93 +175,6 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     }
 }
 
-bool ResolveStableIP6Address(char* tmpAddr)
-{
-    union {
-        IP_ADAPTER_ADDRESSES addresses;
-        char buffer[8192];
-    };
-    ULONG error;
-    ULONG length;
-    PIP_ADAPTER_ADDRESSES currentAdapter;
-    PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
-    in6_addr targetAddress;
-
-    inet_pton(AF_INET6, tmpAddr, &targetAddress);
-
-    // Get a list of all interfaces with IPv6 addresses on the system
-    length = sizeof(buffer);
-    error = GetAdaptersAddresses(AF_INET6,
-        GAA_FLAG_SKIP_ANYCAST |
-        GAA_FLAG_SKIP_MULTICAST |
-        GAA_FLAG_SKIP_DNS_SERVER |
-        GAA_FLAG_SKIP_FRIENDLY_NAME,
-        NULL,
-        &addresses,
-        &length);
-    if (error != ERROR_SUCCESS) {
-        printf("GetAdaptersAddresses() failed: %d" NL, error);
-        return false;
-    }
-
-    currentAdapter = &addresses;
-    currentAddress = nullptr;
-    while (currentAdapter != nullptr) {
-        // First, search for the adapter
-        currentAddress = currentAdapter->FirstUnicastAddress;
-        while (currentAddress != nullptr) {
-            assert(currentAddress->Address.lpSockaddr->sa_family == AF_INET6);
-
-            PSOCKADDR_IN6 currentAddrV6 = (PSOCKADDR_IN6)currentAddress->Address.lpSockaddr;
-
-            if (RtlEqualMemory(&currentAddrV6->sin6_addr, &targetAddress, sizeof(targetAddress))) {
-                // Found interface with matching address
-                break;
-            }
-
-            currentAddress = currentAddress->Next;
-        }
-
-        if (currentAddress != nullptr) {
-            // Get out of the loop if we found the matching address
-            break;
-        }
-
-        currentAdapter = currentAdapter->Next;
-    }
-
-    if (currentAdapter == nullptr) {
-        printf("No adapter found with IPv6 address: %s" NL, tmpAddr);
-        return false;
-    }
-
-    // Now currentAdapter is the adapter we reached the IGD with. Find a suitable
-    // public address that we can use to create the pinhole.
-    currentAddress = currentAdapter->FirstUnicastAddress;
-    while (currentAddress != nullptr) {
-        assert(currentAddress->Address.lpSockaddr->sa_family == AF_INET6);
-
-        PSOCKADDR_IN6 currentAddrV6 = (PSOCKADDR_IN6)currentAddress->Address.lpSockaddr;
-
-        // Exclude temporary addresses and link-local addresses
-        if (currentAddress->SuffixOrigin != IpSuffixOriginRandom && currentAddrV6->sin6_scope_id == 0) {
-            break;
-        }
-
-        currentAddress = currentAddress->Next;
-    }
-
-    if (currentAddress == nullptr) {
-        printf("No suitable alternate address found for %s" NL, tmpAddr);
-        return false;
-    }
-
-    PSOCKADDR_IN6 currentAddrV6 = (PSOCKADDR_IN6)currentAddress->Address.lpSockaddr;
-    inet_ntop(AF_INET6, &currentAddrV6->sin6_addr, tmpAddr, 128);
-
-    return true;
-}
-
 bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
 {
     union {
@@ -336,7 +228,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
     return false;
 }
 
-bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* lanAddrOverride, char* wanAddr)
+bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverride, char* wanAddr)
 {
     struct UPNPUrls urls;
     struct IGDdatas data;
@@ -369,40 +261,13 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* la
         return false;
     }
 
-    if (ipv6) {
-        // Convert what is likely a IPv6 temporary address into
-        // the stable IPv6 address for the same interface.
-        if (ResolveStableIP6Address(localAddress)) {
-            printf("Stable global IPv6 address is: %s" NL, localAddress);
-
-            // Don't try IPv6FC without a control URL
-            if (data.IPv6FC.controlurl[0] != 0) {
-                int firewallEnabled;
-                ret = UPNP_GetFirewallStatus(urls.controlURL_6FC, data.IPv6FC.servicetype, &firewallEnabled, &pinholeAllowed);
-                if (ret == UPNPCOMMAND_SUCCESS) {
-                    printf("UPnP IPv6 firewall control available. Firewall is %s, pinhole is %s" NL,
-                        firewallEnabled ? "enabled" : "disabled",
-                        pinholeAllowed ? "allowed" : "disallowed");
-                }
-                else {
-                    printf("UPnP IPv6 firewall control is unavailable with error %d (%s)" NL, ret, strupnperror(ret));
-                    pinholeAllowed = false;
-                }
-            }
-            else {
-                printf("IPv6 firewall control not supported by UPnP IGD!" NL);
-            }
-        }
+    ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddr);
+    if (ret == UPNPCOMMAND_SUCCESS) {
+        printf("UPnP IGD WAN address is: %s" NL, wanAddr);
     }
     else {
-        ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddr);
-        if (ret == UPNPCOMMAND_SUCCESS) {
-            printf("UPnP IGD WAN address is: %s" NL, wanAddr);
-        }
-        else {
-            // Empty string
-            *wanAddr = 0;
-        }
+        // Empty string
+        *wanAddr = 0;
     }
 
     // We may be mapping on behalf of another device
@@ -414,44 +279,37 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool ipv6, bool enable, char* la
     }
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-        if (!ipv6) {
-            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false)) {
-                success = false;
-            }
-        }
-        if (pinholeAllowed) {
-            UPnPCreatePinholeForPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port);
+        if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false)) {
+            success = false;
         }
     }
 
     // Do a best-effort for IPv4 Wake-on-LAN broadcast mappings
-    if (!ipv6) {
-        for (int i = 0; i < ARRAYSIZE(k_WolPorts); i++) {
-            if (lanAddrOverride == nullptr) {
-                // Map the port to the broadcast address (may not work on all routers). This
-                // ensures delivery even after the ARP entry for this PC times out on the router.
-                int onLinkPrefixLen;
-                if (GetIP4OnLinkPrefixLength(localAddress, &onLinkPrefixLen)) {
-                    int netmask = 0;
-                    for (int j = 0; j < onLinkPrefixLen; j++) {
-                        netmask |= (1 << j);
-                    }
-
-                    in_addr broadcastAddr;
-                    broadcastAddr.S_un.S_addr = inet_addr(localAddress);
-                    broadcastAddr.S_un.S_addr |= ~netmask;
-
-                    char broadcastAddrStr[128];
-                    inet_ntop(AF_INET, &broadcastAddr, broadcastAddrStr, sizeof(broadcastAddrStr));
-
-                    UPnPMapPort(&urls, &data, IPPROTO_UDP, broadcastAddrStr, k_WolPorts[i], enable, true);
+    for (int i = 0; i < ARRAYSIZE(k_WolPorts); i++) {
+        if (lanAddrOverride == nullptr) {
+            // Map the port to the broadcast address (may not work on all routers). This
+            // ensures delivery even after the ARP entry for this PC times out on the router.
+            int onLinkPrefixLen;
+            if (GetIP4OnLinkPrefixLength(localAddress, &onLinkPrefixLen)) {
+                int netmask = 0;
+                for (int j = 0; j < onLinkPrefixLen; j++) {
+                    netmask |= (1 << j);
                 }
+
+                in_addr broadcastAddr;
+                broadcastAddr.S_un.S_addr = inet_addr(localAddress);
+                broadcastAddr.S_un.S_addr |= ~netmask;
+
+                char broadcastAddrStr[128];
+                inet_ntop(AF_INET, &broadcastAddr, broadcastAddrStr, sizeof(broadcastAddrStr));
+
+                UPnPMapPort(&urls, &data, IPPROTO_UDP, broadcastAddrStr, k_WolPorts[i], enable, true);
             }
-            else {
-                // When we're mapping the WOL ports upstream of our router, we map directly to
-                // the port on the upstream address (likely our router's WAN interface).
-                UPnPMapPort(&urls, &data, IPPROTO_UDP, lanAddrOverride, k_WolPorts[i], enable, true);
-            }
+        }
+        else {
+            // When we're mapping the WOL ports upstream of our router, we map directly to
+            // the port on the upstream address (likely our router's WAN interface).
+            UPnPMapPort(&urls, &data, IPPROTO_UDP, lanAddrOverride, k_WolPorts[i], enable, true);
         }
     }
 
@@ -667,7 +525,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         }
 
         // Don't try NAT-PMP if UPnP succeeds
-        if (UPnPHandleDeviceList(ipv4Devs, false, enable, internalAddressIP4, upstreamAddrUPnP)) {
+        if (UPnPHandleDeviceList(ipv4Devs, enable, internalAddressIP4, upstreamAddrUPnP)) {
             printf("UPnP IPv4 port mapping successful" NL);
             if (enable) {
                 // We still want to try NAT-PMP if we're removing
@@ -678,23 +536,6 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         }
 
         freeUPNPDevlist(ipv4Devs);
-    }
-
-    fflush(stdout);
-
-    // Only run IPv6 UPnP discovery on the first hop
-    if (targetAddressIP4 == nullptr) {
-        int upnpErr;
-        struct UPNPDev* ipv6Devs = upnpDiscoverAll(UPNP_DISCOVERY_DELAY_MS, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 1, 2, &upnpErr);
-        char ipv6WanAddr[128] = {};
-
-        printf("UPnP IPv6 IGD discovery completed with error code: %d" NL, upnpErr);
-
-        // Ignore whether IPv6 succeeded when decided to use NAT-PMP
-
-        UPnPHandleDeviceList(ipv6Devs, true, enable, nullptr, ipv6WanAddr);
-
-        freeUPNPDevlist(ipv6Devs);
     }
 
     fflush(stdout);
