@@ -88,7 +88,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         return false;
     }
 
-    printf("Checking for existing UPnP port mapping for %s %s -> %s...", protoStr, portStr, myAddr);
+    printf("Checking for existing UPnP port mapping for %s %s -> %s %s...", protoStr, portStr, myAddr, computerName);
     int err = UPNP_GetSpecificPortMappingEntry(
         urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr,
         intClient, intPort, desc, enabled, leaseDuration);
