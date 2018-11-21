@@ -661,9 +661,9 @@ int main(int argc, char* argv[])
 
     fprintf(stderr, "Detecting public IP address...\n");
 
-    bool upnpRulesFound, igdDisconnected;
+    bool rulesFound, igdDisconnected;
     SOCKADDR_IN locallyReportedWanAddr;
-    if (!CheckWANAccess(&sin, &locallyReportedWanAddr, &upnpRulesFound, &igdDisconnected)) {
+    if (!CheckWANAccess(&sin, &locallyReportedWanAddr, &rulesFound, &igdDisconnected)) {
         return -1;
     }
 
@@ -687,7 +687,7 @@ int main(int argc, char* argv[])
     printf("Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         if (IsDoubleNAT(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Make sure both routers have UPnP enabled, or better yet, switch one of the routers into bridge/AP mode.");
+            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Make sure both routers have UPnP or NAT-PMP enabled, or better yet, switch one of the routers into bridge/AP mode.");
             DisplayMessage(msgBuf);
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
@@ -695,23 +695,23 @@ int main(int argc, char* argv[])
             DisplayMessage(msgBuf);
         }
         else if (igdDisconnected) {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP is enabled in your router settings and that you don't have two devices acting as routers connected together.");
+            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure you don't have two devices acting as routers connected together.");
             DisplayMessage(msgBuf);
         }
-        else if (upnpRulesFound) {
-            snprintf(msgBuf, sizeof(msgBuf), "We found the correct UPnP rules, but we couldn't confirm that they are working. Depending on your router, it may only work when connecting from a different network.\n\n"
-                "You can try streaming from a different network (like cellular data or tethering) by typing the following address into Moonlight's Add PC dialog: %s\n\n"
+        else if (rulesFound) {
+            snprintf(msgBuf, sizeof(msgBuf), "Manual Internet streaming test required!\n\n"
+                "Connect your client device to a different network or cellular data (it MUST NOT on be the same network as this PC for testing!). If Moonlight doesn't automatically connect, you can type the following address into Moonlight's Add PC dialog: %s\n\n"
                 "If that doesn't work, check your router settings for any existing Moonlight port forwarding entries and delete them or try restarting your router.", wanAddrStr);
             DisplayMessage(msgBuf, MpWarn);
         }
         else {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP is enabled in your router settings.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP or NAT-PMP is enabled in your router settings.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
             DisplayMessage(msgBuf);
         }
         return -1;
     }
 
-    snprintf(msgBuf, sizeof(msgBuf), "All tests passed! You should be able to stream by typing the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
+    snprintf(msgBuf, sizeof(msgBuf), "All tests passed! If Moonlight doesn't automatically connect outside your network, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
     DisplayMessage(msgBuf, MpInfo);
 
     return 0;
