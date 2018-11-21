@@ -8,6 +8,9 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <UIRef Id="WixUI_Minimal" />
+
     <Feature Id="ProductFeature" Title="MISHSetup" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
