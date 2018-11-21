@@ -160,6 +160,17 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         return false;
     }
 
+    // If we didn't get a local address, use the address of the interface we bound to.
+    // NB: We can't do this in all cases because we may be impersonating an upstream
+    // device if we're behind multiple NATs.
+    if (localAddr->ss_family == AF_INET && ((PSOCKADDR_IN)localAddr)->sin_addr.S_un.S_addr == 0) {
+        if (getsockname(sock, (struct sockaddr*)localAddr, &localAddrLen) == SOCKET_ERROR) {
+            printf("getsockname() failed: %d\n", WSAGetLastError());
+            closesocket(sock);
+            return false;
+        }
+    }
+
     reqMsg = {};
     reqMsg.hdr.version = PCP_VERSION;
     reqMsg.hdr.opcode = OPCODE_MAP_REQUEST;

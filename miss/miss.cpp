@@ -594,15 +594,29 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         closenatpmp(&natpmp);
     }
 
-    // Try PCP for IPv4 if UPnP and NAT-PMP have both failed for the non-default gateway router.
-    // This may be the case for CGN that only supports PCP.
-    if (tryPcp && targetAddressIP4 != nullptr && internalAddressIP4 != nullptr) {
+    // Try PCP for IPv4 if UPnP and NAT-PMP have both failed. This may be the case for CGN that only supports PCP.
+    if (tryPcp) {
         SOCKADDR_IN targetAddr = {};
         SOCKADDR_IN internalAddr = {};
+
         targetAddr.sin_family = AF_INET;
-        targetAddr.sin_addr.S_un.S_addr = inet_addr(targetAddressIP4);
         internalAddr.sin_family = AF_INET;
-        internalAddr.sin_addr.S_un.S_addr = inet_addr(internalAddressIP4);
+
+        if (targetAddressIP4 != nullptr && internalAddressIP4 != nullptr) {
+            targetAddr.sin_addr.S_un.S_addr = inet_addr(targetAddressIP4);
+            internalAddr.sin_addr.S_un.S_addr = inet_addr(internalAddressIP4);
+        }
+        else {
+            MIB_IPFORWARDROW route;
+            DWORD error = GetBestRoute(0, 0, &route);
+            if (error == NO_ERROR) {
+                targetAddr.sin_addr.S_un.S_addr = route.dwForwardNextHop;
+            }
+            else {
+                printf("GetBestRoute() failed: %d" NL, error);
+                goto Exit;
+            }
+        }
 
         bool success = true;
         for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
@@ -631,6 +645,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         }
     }
 
+Exit:
     // Write this at the end to avoid clobbering an input parameter
     if (upstreamAddrNatPmp[0] != 0 && inet_addr(upstreamAddrNatPmp) != 0) {
         printf("Using NAT-PMP upstream IPv4 address: %s" NL, upstreamAddrNatPmp);
