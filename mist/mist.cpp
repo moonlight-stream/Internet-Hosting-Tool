@@ -422,6 +422,7 @@ UPnPPortStatus UPnPCheckPort(struct UPNPUrls* urls, struct IGDdatas* data, int p
 bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* foundPortForwardingRules, bool* igdDisconnected)
 {
     natpmp_t natpmp;
+    bool foundUpnpIgd = false;
 
     *foundPortForwardingRules = false;
     *igdDisconnected = false;
@@ -451,6 +452,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
         if (ret != 0) {
             // Connected or disconnected IGD
             if (ret == 1 || ret == 2) {
+                foundUpnpIgd = true;
                 if (ret == 2) {
                     *igdDisconnected = true;
                 }
@@ -517,6 +519,12 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
             printf("%s\n", addrStr);
             if (wanAddr->sin_addr.S_un.S_addr != 0) {
                 gotReportedWanAddress = true;
+                
+                if (!foundUpnpIgd) {
+                    // Just in case we have a NAT-PMP gateway that doesn't do NAT reflection
+                    // let's assume it's all okay if we got any response at all
+                    *foundPortForwardingRules = true;
+                }
             }
         }
         else {
