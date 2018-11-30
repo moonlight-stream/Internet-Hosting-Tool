@@ -112,7 +112,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         timeout = 1;
     }
 
-    bytesRead = SOCKET_ERROR;
+    bytesRead = 0;
     for (i = 0; i < tries; i++) {
         // Retransmit the request every second until the timeout elapses
         if (send(sock, (char *)&reqMsg, sizeof(reqMsg), 0) == SOCKET_ERROR) {
