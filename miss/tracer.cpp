@@ -47,6 +47,13 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
         return nullptr;
     }
 
+    // We will be reading all responses at the end, so ensure we have ample buffer space
+    // to allow responses to accumulate without loss.
+    int recvBufferSize = 65535;
+    if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&recvBufferSize, sizeof(recvBufferSize)) == SOCKET_ERROR) {
+        printf("setsockopt() failed: %d\n", WSAGetLastError());
+    }
+
     // Send the first search message with HOST set properly
     chars = snprintf(searchBuffer, ARRAYSIZE(searchBuffer), k_SsdpSearchFormatString, inet_ntoa(address));
     if (send(s, searchBuffer, chars, 0) == SOCKET_ERROR) {
