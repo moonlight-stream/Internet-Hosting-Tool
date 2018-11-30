@@ -244,6 +244,10 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
         printf("PCP message truncated: %d\n", bytesRead);
         goto fail;
     }
+    else if (resp.hdr.hdr.version != PCP_VERSION) {
+        printf("PCP version mismatch: %x\n", resp.hdr.hdr.version);
+        goto fail;
+    }
     else if (resp.hdr.hdr.opcode != OPCODE_MAP_RESPONSE) {
         printf("PCP message type mismatch: %x\n", resp.hdr.hdr.opcode);
         goto fail;
