@@ -52,7 +52,16 @@ enum MessagePriority {
     MpError
 };
 
-void DisplayMessage(const char* message, MessagePriority priority = MpError, bool terminal = true)
+VOID CALLBACK MsgBoxHelpCallback(LPHELPINFO lpHelpInfo)
+{
+    const char* helpUrl = (const char*)lpHelpInfo->dwContextId;
+
+    // It's recommended to initialize COM before calling ShellExecute()
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    ShellExecuteA(nullptr, "open", helpUrl, nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessagePriority priority = MpError, bool terminal = true)
 {
     printf("%s\n", message);
 
@@ -77,23 +86,34 @@ void DisplayMessage(const char* message, MessagePriority priority = MpError, boo
         fflush(stdout);
     }
 
-
-    DWORD flags = MB_OK | MB_TOPMOST | MB_SETFOREGROUND;
+    MSGBOXPARAMSA msgParams;
+    msgParams.cbSize = sizeof(msgParams);
+    msgParams.hwndOwner = nullptr;
+    msgParams.hInstance = nullptr;
+    msgParams.lpszText = message;
+    msgParams.lpszCaption = "Moonlight Internet Streaming Tester";
+    msgParams.dwStyle = MB_OK | MB_TOPMOST | MB_SETFOREGROUND;
+    if (helpUrl) {
+        msgParams.dwStyle |= MB_HELP;
+    }
     switch (priority) {
     case MpInfo:
-        flags |= MB_ICONINFORMATION;
+        msgParams.dwStyle |= MB_ICONINFORMATION;
         break;
     case MpWarn:
-        flags |= MB_ICONWARNING;
+        msgParams.dwStyle |= MB_ICONWARNING;
         break;
     case MpError:
-        flags |= MB_ICONERROR;
+        msgParams.dwStyle |= MB_ICONERROR;
         break;
     }
-    MessageBoxA(nullptr, message, "Moonlight Internet Streaming Tester", flags);
+    msgParams.lpfnMsgBoxCallback = MsgBoxHelpCallback;
+    msgParams.dwContextHelpId = (DWORD_PTR)helpUrl;
+    msgParams.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
+    MessageBoxIndirectA(&msgParams);
 
     if (priority != MpInfo && terminal) {
-        flags = MB_YESNO | MB_TOPMOST | MB_SETFOREGROUND | MB_ICONINFORMATION;
+        UINT flags = MB_YESNO | MB_TOPMOST | MB_SETFOREGROUND | MB_ICONINFORMATION;
         switch (MessageBoxA(nullptr, "Would you like to view the troubleshooting log?",
             "Moonlight Internet Streaming Tester", flags))
         {
@@ -116,7 +136,8 @@ bool IsGameStreamEnabled()
     error = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\NVIDIA Corporation\\NvStream", 0, KEY_READ | KEY_WOW64_64KEY, &key);
     if (error != ERROR_SUCCESS) {
         printf("RegOpenKeyEx() failed: %d\n", error);
-        DisplayMessage("GeForce Experience was not detected on this PC. Make sure you're installing this utility on your GeForce GameStream-compatible PC, not the device running Moonlight.");
+        DisplayMessage("GeForce Experience was not detected on this PC. Make sure you're installing this utility on your GeForce GameStream-compatible PC, not the device running Moonlight.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
         return false;
     }
 
@@ -128,7 +149,8 @@ bool IsGameStreamEnabled()
         if (error != ERROR_SUCCESS) {
             printf("RegQueryValueExA() failed: %d\n", error);
         }
-        DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.");
+        DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
         return false;
     }
     else {
@@ -636,7 +658,7 @@ int main(int argc, char* argv[])
         snprintf(msgBuf, sizeof(msgBuf),
             "Local GameStream connectivity check failed. Please try reinstalling GeForce Experience.\n\nThe following ports were not working:\n%s",
             portMsgBuf);
-        DisplayMessage(msgBuf);
+        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
 
@@ -653,7 +675,7 @@ int main(int argc, char* argv[])
         snprintf(msgBuf, sizeof(msgBuf),
             "Local network GameStream connectivity check failed. Try temporarily disabling your firewall software or adding firewall exceptions for the following ports:\n%s",
             portMsgBuf);
-        DisplayMessage(msgBuf);
+        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
 
@@ -684,33 +706,31 @@ int main(int argc, char* argv[])
     // Try to connect via WAN IPv4 address
     printf("Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
-        if (IsDoubleNAT(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Make sure both routers have UPnP or NAT-PMP enabled, or better yet, switch one of the routers into bridge/AP mode.");
-            DisplayMessage(msgBuf);
+        // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
+        // we probably would not have even gotten past STUN.
+        if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) {
+            snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Click the Help button for guidance on fixing this issue.");
+            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#connected-through-another-router-error");
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Contact your ISP and ask for a dedicated public IP address.");
-            DisplayMessage(msgBuf);
-        }
-        else if (igdDisconnected) {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure you don't have two devices acting as routers connected together.");
-            DisplayMessage(msgBuf);
+            snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
+            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
         }
         else if (rulesFound) {
             snprintf(msgBuf, sizeof(msgBuf), "Manual Internet streaming test required!\n\n"
                 "Connect your client device to a different network or cellular data (it MUST NOT on be the same network as this PC for testing!). If Moonlight doesn't automatically connect, you can type the following address into Moonlight's Add PC dialog: %s\n\n"
-                "If that doesn't work, check your router settings for any existing Moonlight port forwarding entries and delete them or try restarting your router.", wanAddrStr);
-            DisplayMessage(msgBuf, MpWarn);
+                "If that doesn't work, click the Help button for guidance on fixing this issue.", wanAddrStr);
+            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#manual-internet-streaming-test-fails", MpWarn);
         }
         else {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Make sure UPnP or NAT-PMP is enabled in your router settings.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
-            DisplayMessage(msgBuf);
+            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
         }
         return -1;
     }
 
     snprintf(msgBuf, sizeof(msgBuf), "All tests passed! If Moonlight doesn't automatically connect outside your network, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
-    DisplayMessage(msgBuf, MpInfo);
+    DisplayMessage(msgBuf, nullptr, MpInfo);
 
     return 0;
 }
