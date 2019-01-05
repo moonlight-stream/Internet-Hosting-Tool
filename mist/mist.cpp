@@ -324,7 +324,7 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
 
     printf("Finding local IP address...");
 
-    host = gethostbyname("google.com");
+    host = gethostbyname("moonlight-stream.org");
     if (host == nullptr) {
         printf("gethostbyname() failed: %d\n", WSAGetLastError());
         return false;

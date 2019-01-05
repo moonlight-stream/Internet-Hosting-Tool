@@ -177,7 +177,7 @@ bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount)
         char replyBuffer[128];
     };
 
-    host = gethostbyname("google.com");
+    host = gethostbyname("moonlight-stream.org");
     if (host == nullptr) {
         printf("gethostbyname() failed: %d\n", WSAGetLastError());
         return false;
