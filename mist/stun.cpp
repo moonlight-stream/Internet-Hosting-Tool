@@ -61,7 +61,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         char buf[1024];
     } resp;
 
-    host = gethostbyname("stun.stunprotocol.org");
+    host = gethostbyname("stun.moonlight-stream.org");
     if (host == nullptr) {
         printf("gethostbyname() failed: %d\n", WSAGetLastError());
         return false;
