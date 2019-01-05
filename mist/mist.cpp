@@ -56,6 +56,10 @@ VOID CALLBACK MsgBoxHelpCallback(LPHELPINFO lpHelpInfo)
 {
     const char* helpUrl = (const char*)lpHelpInfo->dwContextId;
 
+    if (!helpUrl) {
+        return;
+    }
+
     // It's recommended to initialize COM before calling ShellExecute()
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     ShellExecuteA(nullptr, "open", helpUrl, nullptr, nullptr, SW_SHOWNORMAL);
