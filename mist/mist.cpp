@@ -460,10 +460,10 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
                 printf("Detecting WAN IP address via UPnP...");
                 ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddrStr);
                 if (ret == UPNPCOMMAND_SUCCESS && strlen(wanAddrStr) > 0) {
-                    reportedWanAddr->sin_addr.S_un.S_addr = wanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
+                    reportedWanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
                     printf("%s\n", wanAddrStr);
 
-                    if (wanAddr->sin_addr.S_un.S_addr != 0) {
+                    if (reportedWanAddr->sin_addr.S_un.S_addr != 0) {
                         gotReportedWanAddress = true;
                     }
                 }
@@ -514,10 +514,10 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
 
         if (natPmpErr == 0) {
             char addrStr[64];
-            reportedWanAddr->sin_addr = wanAddr->sin_addr = response.pnu.publicaddress.addr;
+            reportedWanAddr->sin_addr = response.pnu.publicaddress.addr;
             inet_ntop(AF_INET, &response.pnu.publicaddress.addr, addrStr, sizeof(addrStr));
             printf("%s\n", addrStr);
-            if (wanAddr->sin_addr.S_un.S_addr != 0) {
+            if (reportedWanAddr->sin_addr.S_un.S_addr != 0) {
                 gotReportedWanAddress = true;
                 
                 if (!foundUpnpIgd) {
@@ -534,10 +534,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
 
     printf("Detecting WAN IP address via STUN...");
     if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr)) {
-        if (!gotReportedWanAddress) {
-            DisplayMessage("Unable to determine your public IP address. Please check your Internet connection.");
-            return false;
-        }
+        DisplayMessage("Unable to determine your public IP address. Please check your Internet connection.");
+        return false;
     }
     else {
         char addrStr[64];
