@@ -533,8 +533,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     }
 
     printf("Detecting WAN IP address via STUN...");
-    if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr)) {
-        DisplayMessage("Unable to determine your public IP address. Please check your Internet connection.");
+    if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr) && !getExternalAddressPortIP4(IPPROTO_TCP, 0, wanAddr)) {
+        DisplayMessage("Unable to determine your public IP address. Please check your Internet connection or try again in a few minutes.");
         return false;
     }
     else {
