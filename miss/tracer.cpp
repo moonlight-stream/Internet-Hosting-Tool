@@ -22,6 +22,55 @@ static const char* k_SsdpSearchFormatString =
     "MX: 5\r\n"
     "\r\n";
 
+// Based on logic in https://github.com/miniupnp/miniupnp/blob/master/miniupnpc/minissdpc.c
+static void
+parseReply(const char* reply, int size,
+           const char** location, int *locationsize,
+           const char** st, int* stsize,
+           const char** usn, int* usnsize)
+{
+    int lineStartIdx = 0;
+    int headerEndIdx = 0;
+    for (int i = 0; i < size; i++) {
+        switch (reply[i])
+        {
+        case ':':
+            // Stop parsing the header at the first colon, but ignore subsequent colons
+            if (headerEndIdx == 0) {
+                headerEndIdx = i;
+            }
+            break;
+        case '\r':
+        case '\n':
+            if (headerEndIdx != 0) {
+                // Skip the colon and spaces
+                do { headerEndIdx++; } while (reply[headerEndIdx] == ' ');
+
+                // Check if it's one of the values we care about
+                if (!_strnicmp(reply + lineStartIdx, "location:", 9)) {
+                    *location = reply + headerEndIdx;
+                    *locationsize = i - headerEndIdx;
+                }
+                else if (!_strnicmp(reply + lineStartIdx, "st:", 3)) {
+                    *st = reply + headerEndIdx;
+                    *stsize = i - headerEndIdx;
+                }
+                else if (!_strnicmp(reply + lineStartIdx, "usn:", 4)) {
+                    *usn = reply + headerEndIdx;
+                    *usnsize = i - headerEndIdx;
+                }
+
+                // Move on to the next header value
+                headerEndIdx = 0;
+            }
+            lineStartIdx = i + 1;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
 {
     SOCKET s;
@@ -122,38 +171,37 @@ struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address)
         }
 
         // Parse the header options
-        // SERVER: FreeBSD/11.2-RELEASE-p2 UPnP/1.1 MiniUPnPd/2.0\r\n
-        char* location = nullptr;
-        char* st = nullptr;
-        while (char* headerName = strtok(nullptr, "\r\n:")) {
-            char* headerValue = strtok(nullptr, "\r");
-            if (headerValue == nullptr) {
-                printf("Unexpected end of SSDP header\n");
-                break;
-            }
+        char* remainder = strtok(nullptr, "");
+        const char* loc = nullptr;
+        const char* st = nullptr;
+        const char* usn = ""; // Initialize to empty since it's optional
+        int locSize = 0;
+        int stSize = 0;
+        int usnSize = 0;
+        parseReply(remainder, strlen(remainder),
+            &loc, &locSize, &st, &stSize, &usn, &usnSize);
 
-            // Skip leading spaces
-            while (*headerValue == ' ') headerValue++;
-
-            if (!_stricmp(headerName, "LOCATION")) {
-                location = headerValue;
-            }
-            else if (!_stricmp(headerName, "ST")) {
-                st = headerValue;
-            }
-        }
-
-        if (!location || location[0] == 0 || !st || st[0] == 0) {
-            printf("Required value missing: \"%s\" \"%s\"\n", location, st);
+        if (!loc || locSize == 0 || !st || stSize == 0) {
+            printf("Required value missing: %d %d\n", locSize, stSize);
             continue;
         }
 
-        struct UPNPDev* newDev = (struct UPNPDev*)malloc(sizeof(*newDev) + strlen(location) + strlen(st) + 2);
-        
+        struct UPNPDev* newDev = (struct UPNPDev*)malloc(sizeof(*newDev) + usnSize + locSize + stSize + 3);
+
         newDev->pNext = deviceList;
-        newDev->usn = &newDev->buffer[0]; newDev->buffer[0] = 0;
-        newDev->descURL = strcpy(newDev->usn + strlen(newDev->usn) + 1, location);
-        newDev->st = strcpy(newDev->descURL + strlen(newDev->descURL) + 1, st);
+
+        newDev->usn = &newDev->buffer[0];
+        memcpy(newDev->usn, usn, usnSize);
+        newDev->usn[usnSize] = 0;
+
+        newDev->descURL = newDev->usn + usnSize + 1;
+        memcpy(newDev->descURL, loc, locSize);
+        newDev->descURL[locSize] = 0;
+
+        newDev->st = newDev->descURL + locSize + 1;
+        memcpy(newDev->st, st, stSize);
+        newDev->st[stSize] = 0;
+
         newDev->scope_id = 0; // IPv6 only
 
         deviceList = newDev;
