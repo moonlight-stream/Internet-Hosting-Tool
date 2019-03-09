@@ -44,10 +44,12 @@
                         DisplayName="Moonlight Internet Streaming Service"
                         Description="Automatically manages router port forwarding rules required to use Moonlight over the Internet"
                         Start="auto"
-                        Account="LocalSystem"
+                        Account="NT AUTHORITY\LocalService"
                         ErrorControl="ignore"
                         Interactive="no">
-          <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" />
+          <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" ServiceSid="restricted">
+            <RequiredPrivilege>SeChangeNotifyPrivilege</RequiredPrivilege>
+          </ServiceConfig>
         </ServiceInstall>
         <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="MISS" Wait="yes" />
       </Component>
