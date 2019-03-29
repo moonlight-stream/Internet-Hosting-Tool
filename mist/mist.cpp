@@ -70,11 +70,13 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
     printf("%s\n", message);
 
     if (terminal) {
-        printf("--------------- MISS LOG -------------------\n");
+		char missPath[MAX_PATH + 1];
+		FILE* f;
 
-        char missPath[MAX_PATH + 1];
+        printf("--------------- CURRENT MISS LOG -------------------\n");
+
         ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", missPath, sizeof(missPath));
-        FILE* f = fopen(missPath, "r");
+        f = fopen(missPath, "r");
         if (f != nullptr) {
             char buffer[1024];
             while (!feof(f)) {
@@ -84,8 +86,24 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
             fclose(f);
         }
         else {
-            printf("Failed to find MISS log\n");
+            printf("Failed to find current MISS log\n");
         }
+
+		printf("\n----------------- OLD MISS LOG ---------------------\n");
+
+		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", missPath, sizeof(missPath));
+		f = fopen(missPath, "r");
+		if (f != nullptr) {
+			char buffer[1024];
+			while (!feof(f)) {
+				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+				fwrite(buffer, 1, bytesRead, stdout);
+			}
+			fclose(f);
+		}
+		else {
+			printf("Failed to find old MISS log\n");
+		}
 
         fflush(stdout);
     }
