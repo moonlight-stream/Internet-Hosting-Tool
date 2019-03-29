@@ -752,11 +752,12 @@ void ResetLogFile()
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
 
-    // Delete the old log file
-    DeleteFileA(oldLogFilePath);
+	// Close the existing stdout handle. This is important because otherwise
+	// it may still be open as stdout when we try to MoveFileEx below.
+	fclose(stdout);
 
-    // Rotate the current to the old log file
-    MoveFileA(currentLogFilePath, oldLogFilePath);
+	// Rotate the current to the old log file
+	MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
 
     // Redirect stdout to this new file
     freopen(currentLogFilePath, "w", stdout);
