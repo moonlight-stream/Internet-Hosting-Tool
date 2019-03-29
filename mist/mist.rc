@@ -3,6 +3,7 @@
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     VER_VERSION
+PRODUCTVERSION  VER_VERSION
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -11,6 +12,8 @@ BEGIN
             VALUE "CompanyName",        VER_COMPANYNAME_STR
             VALUE "FileDescription",    "Moonlight Internet Streaming Tester"
             VALUE "ProductName",        VER_PRODUCTNAME_STR
+            VALUE "FileVersion",        VER_VERSION_STR
+            VALUE "ProductVersion",     VER_VERSION_STR
         END
     END
 
