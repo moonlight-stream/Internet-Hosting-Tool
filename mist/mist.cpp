@@ -617,6 +617,8 @@ bool IsDoubleNAT(PSOCKADDR_IN wanAddr)
 int main(int argc, char* argv[])
 {
     WSADATA wsaData;
+	SYSTEMTIME time;
+	char timeString[MAX_PATH + 1] = {};
 
     char tempPath[MAX_PATH + 1];
     GetTempPathA(sizeof(tempPath), tempPath);
@@ -626,6 +628,11 @@ int main(int argc, char* argv[])
 
     // Print a log header
     printf("Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n");
+
+	// Print the current time
+	GetSystemTime(&time);
+	GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
+	printf("The current UTC time is: %s\n", timeString);
 
     // Print a console header
     fprintf(stderr, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n\n");

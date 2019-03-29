@@ -746,6 +746,8 @@ void ResetLogFile()
 {
     char oldLogFilePath[MAX_PATH + 1];
     char currentLogFilePath[MAX_PATH + 1];
+	char timeString[MAX_PATH + 1] = {};
+	SYSTEMTIME time;
 
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
@@ -761,6 +763,11 @@ void ResetLogFile()
 
     // Print a log header
     printf("Moonlight Internet Streaming Service v" VER_VERSION_STR NL);
+
+	// Print the current time
+	GetSystemTime(&time);
+	GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
+	printf("The current UTC time is: %s" NL, timeString);
 }
 
 DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
