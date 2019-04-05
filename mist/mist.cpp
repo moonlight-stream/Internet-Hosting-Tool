@@ -42,8 +42,13 @@ static struct port_entry {
     {IPPROTO_UDP, 47998, true},
     {IPPROTO_UDP, 47999, true},
     {IPPROTO_UDP, 48000, true},
+
+#if 0
+	// These are not currently used, so let's
+	// avoid testing them for now.
     {IPPROTO_UDP, 48002, true},
     {IPPROTO_UDP, 48010, true}
+#endif
 };
 
 char logFilePath[MAX_PATH + 1];
