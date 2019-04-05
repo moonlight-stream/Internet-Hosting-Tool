@@ -420,7 +420,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
 			// This is required to confirm functionality with the loopback relay.
 			// TestHttpPort() can take significantly longer to timeout than TestPort(),
 			// so we only do this test if we believe we're likely to get a response.
-			printf("Testing TCP port %d with HTTP traffic...", k_Ports[i].port);
+			printf("Testing TCP %d with HTTP traffic...", k_Ports[i].port);
 			status = TestHttpPort(addr, k_Ports[i].port);
 		}
 
@@ -610,7 +610,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
                     case CONFLICTED:
                         snprintf(conflictMessage, sizeof(conflictMessage),
                             "Detected a port forwarding conflict with another PC on your network: %s\n\n"
-                            "Remove that PC from your network or uninstall the Moonlight Internet Streaming Service from it, then restart your router.",
+                            "Remove that PC from your network or uninstall the Moonlight Internet Streaming Helper from it, then restart your router.",
                             conflictEntry);
                         DisplayMessage(conflictMessage);
                         return false;
@@ -758,7 +758,7 @@ int main(int argc, char* argv[])
     char msgBuf[2048];
     char portMsgBuf[512];
 
-    fprintf(stderr, "Testing local GameStream connectivity...\n");
+    fprintf(stderr, "Testing GameStream connectivity on this PC...\n");
 
     // Try to connect via IPv4 loopback
     ss = {};
@@ -767,8 +767,7 @@ int main(int argc, char* argv[])
     printf("Testing GameStream ports via loopback\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         snprintf(msgBuf, sizeof(msgBuf),
-            "Local GameStream connectivity check failed. Please try reinstalling GeForce Experience.\n\nThe following ports were not working:\n%s",
-            portMsgBuf);
+            "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
@@ -778,14 +777,13 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    fprintf(stderr, "Testing network GameStream connectivity...\n");
+    fprintf(stderr, "Testing GameStream connectivity on your local network...\n");
 
     // Try to connect via LAN IPv4 address
     printf("Testing GameStream ports via local network\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         snprintf(msgBuf, sizeof(msgBuf),
-            "Local network GameStream connectivity check failed. Try temporarily disabling your firewall software or adding firewall exceptions for the following ports:\n%s",
-            portMsgBuf);
+            "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
@@ -809,7 +807,7 @@ int main(int argc, char* argv[])
         printf("Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
     }
 
-    fprintf(stderr, "Testing Internet GameStream connectivity...\n");
+    fprintf(stderr, "Testing GameStream connectivity over the Internet...\n");
 
     char wanAddrStr[64];
     inet_ntop(AF_INET, &sin.sin_addr, wanAddrStr, sizeof(wanAddrStr));
@@ -833,7 +831,6 @@ int main(int argc, char* argv[])
 			// We can get here if the router doesn't support NAT reflection.
 			// We'll need to call out to our loopback server to get a second opinion.
 
-			fprintf(stderr, "Testing Internet GameStream connectivity with loopback server...\n");
 			printf("Testing GameStream ports via loopback server\n");
 
 			host = gethostbyname("loopback.moonlight-stream.org");
@@ -854,7 +851,9 @@ int main(int argc, char* argv[])
     }
 
 AllTestsPassed:
-    snprintf(msgBuf, sizeof(msgBuf), "All tests passed! If Moonlight doesn't automatically connect outside your network, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
+    snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to stream over the Internet!\n\n"
+		"For the easiest setup, you should pair Moonlight to your PC from your home network before trying to stream over the Internet.\n\n"
+		"If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
     DisplayMessage(msgBuf, nullptr, MpInfo);
 
     return 0;
