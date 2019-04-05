@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <shellapi.h>
 #include <objbase.h>
+#include <WinInet.h>
 
 #include "..\version.h"
 
@@ -18,6 +19,7 @@
 #pragma comment(lib, "libnatpmp.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "wininet.lib")
 
 #define MINIUPNP_STATICLIB
 #include <miniupnpc/miniupnpc.h>
@@ -272,12 +274,23 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
             fd_set fds;
 
             FD_ZERO(&fds);
-            FD_SET(clientSock, &fds);
 
+			if (serverSock != INVALID_SOCKET) {
+				FD_SET(serverSock, &fds);
+			}
+			else {
+				FD_SET(clientSock, &fds);
+			}
+
+			// If we have a server socket, listen for the accept() instead of the
+			// connect() so we can be compatible with the loopback relay.
             timeout.tv_sec = 3;
-            err = select(0, nullptr, &fds, nullptr, &timeout);
+            err = select(0,
+				serverSock != INVALID_SOCKET ? &fds : nullptr,
+				serverSock == INVALID_SOCKET ? &fds : nullptr,
+				nullptr, &timeout);
             if (err == 1) {
-                // Our FD was signalled for connect() completion
+                // Our FD was signalled for connect() or accept() completion
                 printf("Success\n");
             }
             else if (err == 0) {
@@ -333,6 +346,58 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     }
 }
 
+PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
+{
+	HINTERNET hInternet;
+	HINTERNET hRequest;
+	char url[1024];
+
+	hInternet = InternetOpenA("MIST", 0, nullptr, nullptr, 0);
+	if (hInternet == nullptr) {
+		printf("InternetOpen() failed: %d\n", GetLastError());
+		return PortTestError;
+	}
+
+	char addrStr[64];
+	inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+
+	sprintf(url, "%s://%s:%d/",
+		port == 47989 ? "http" : "https",
+		addrStr,
+		port);
+
+	hRequest = InternetOpenUrlA(hInternet, url, nullptr, 0,
+		INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_NO_UI | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_RELOAD,
+		NULL);
+	if (hRequest == nullptr) {
+		if (GetLastError() == ERROR_INTERNET_CLIENT_AUTH_CERT_NEEDED) {
+			// This is expected for our HTTPS connection
+			printf("Success\n");
+		}
+		else {
+			// CANNOT_CONNECT is the "expected" error
+			if (GetLastError() == ERROR_INTERNET_CANNOT_CONNECT) {
+				printf("Failed\n");
+			}
+			else {
+				printf("Failed: %d\n", GetLastError());
+			}
+
+			InternetCloseHandle(hInternet);
+			return PortTestError;
+		}
+	}
+	else {
+		printf("Success\n");
+		InternetCloseHandle(hRequest);
+	}
+
+
+	InternetCloseHandle(hInternet);
+
+	return PortTestOk;
+}
+
 bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
 {
     bool ret = true;
@@ -341,7 +406,19 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
         printf("Testing %s %d...",
             k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
             k_Ports[i].port);
-        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+		PortTestStatus status;
+		
+		status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+
+		if (status != PortTestError && !k_Ports[i].withServer) {
+			// Test using a real HTTP client if the port wasn't totally dead.
+			// This is required to confirm functionality with the loopback relay.
+			// TestHttpPort() can take significantly longer to timeout than TestPort(),
+			// so we only do this test if we believe we're likely to get a response.
+			printf("Testing TCP port %d with HTTP traffic...", k_Ports[i].port);
+			status = TestHttpPort(addr, k_Ports[i].port);
+		}
+
         if (status != PortTestOk) {
             // If we got an unknown result, assume it matches with whatever
             // we've gotten so far.
@@ -745,19 +822,33 @@ int main(int argc, char* argv[])
             snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
         }
-        else if (rulesFound) {
-            snprintf(msgBuf, sizeof(msgBuf), "Manual Internet streaming test required!\n\n"
-                "Connect your client device to a different network or cellular data (it MUST NOT on be the same network as this PC for testing!). If Moonlight doesn't automatically connect, you can type the following address into Moonlight's Add PC dialog: %s\n\n"
-                "If that doesn't work, click the Help button for guidance on fixing this issue.", wanAddrStr);
-            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#manual-internet-streaming-test-fails", MpWarn);
-        }
-        else {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
-            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
-        }
+		else {
+			struct hostent* host;
+
+			// We can get here if the router doesn't support NAT reflection.
+			// We'll need to call out to our loopback server to get a second opinion.
+
+			fprintf(stderr, "Testing Internet GameStream connectivity with loopback server...\n");
+			printf("Testing GameStream ports via loopback server\n");
+
+			host = gethostbyname("loopback.moonlight-stream.org");
+			if (host != nullptr) {
+				sin.sin_addr = *(struct in_addr*)host->h_addr;
+				if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf))) {
+					goto AllTestsPassed;
+				}
+			}
+			else {
+				printf("gethostbyname() failed: %d\n", WSAGetLastError());
+			}
+		}
+
+        snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
         return -1;
     }
 
+AllTestsPassed:
     snprintf(msgBuf, sizeof(msgBuf), "All tests passed! If Moonlight doesn't automatically connect outside your network, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
     DisplayMessage(msgBuf, nullptr, MpInfo);
 
