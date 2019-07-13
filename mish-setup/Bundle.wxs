@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension">
+	<Bundle Name="Moonlight Internet Streaming Helper" Manufacturer="Moonlight Game Streaming Project" Version="!(bind.packageVersion.mish)" UpgradeCode="a2ce5056-1114-44b9-b79b-952ef46d3d50">
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+      <bal:WixStandardBootstrapperApplication
+            LicenseFile="license.rtf"
+            ShowVersion="yes"
+            SuppressOptionsUI="yes"
+            />
+    </BootstrapperApplicationRef>
+
+    <WixVariable Id="WixUILicenseRtf" Value="" />
+
+    <Chain>
+      <MsiPackage Id="mish" SourceFile="$(var.mish.TargetPath)" />
+      <MsiPackage SourceFile="$(var.GSv6FwdSetup.TargetPath)" />
+		</Chain>
+	</Bundle>
+</Wix>

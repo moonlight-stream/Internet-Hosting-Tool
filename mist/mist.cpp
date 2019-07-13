@@ -77,13 +77,13 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
     printf("%s\n", message);
 
     if (terminal) {
-		char missPath[MAX_PATH + 1];
+		char logPath[MAX_PATH + 1];
 		FILE* f;
 
         printf("--------------- CURRENT MISS LOG -------------------\n");
 
-        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", missPath, sizeof(missPath));
-        f = fopen(missPath, "r");
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", logPath, sizeof(logPath));
+        f = fopen(logPath, "r");
         if (f != nullptr) {
             char buffer[1024];
             while (!feof(f)) {
@@ -98,8 +98,8 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 
 		printf("\n----------------- OLD MISS LOG ---------------------\n");
 
-		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", missPath, sizeof(missPath));
-		f = fopen(missPath, "r");
+		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", logPath, sizeof(logPath));
+		f = fopen(logPath, "r");
 		if (f != nullptr) {
 			char buffer[1024];
 			while (!feof(f)) {
@@ -110,6 +110,38 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 		}
 		else {
 			printf("Failed to find old MISS log\n");
+		}
+
+		printf("--------------- CURRENT GSV6FWD LOG -------------------\n");
+
+		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-current.log", logPath, sizeof(logPath));
+		f = fopen(logPath, "r");
+		if (f != nullptr) {
+			char buffer[1024];
+			while (!feof(f)) {
+				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+				fwrite(buffer, 1, bytesRead, stdout);
+			}
+			fclose(f);
+		}
+		else {
+			printf("Failed to find current GSv6Fwd log\n");
+		}
+
+		printf("\n----------------- OLD GSV6FWD LOG ---------------------\n");
+
+		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-old.log", logPath, sizeof(logPath));
+		f = fopen(logPath, "r");
+		if (f != nullptr) {
+			char buffer[1024];
+			while (!feof(f)) {
+				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+				fwrite(buffer, 1, bytesRead, stdout);
+			}
+			fclose(f);
+		}
+		else {
+			printf("Failed to find old GSv6Fwd log\n");
 		}
 
         fflush(stdout);

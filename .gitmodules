@@ -1,0 +1,3 @@
+[submodule "GS-IPv6-Forwarder"]
+	path = GS-IPv6-Forwarder
+	url = https://github.com/moonlight-stream/GS-IPv6-Forwarder.git
