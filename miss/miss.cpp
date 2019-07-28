@@ -97,7 +97,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         printf("NOT FOUND" NL);
     }
     else if (err == UPNPCOMMAND_SUCCESS) {
-		// Some routers change the description, so we can't check that here
+        // Some routers change the description, so we can't check that here
         if (!strcmp(intClient, myAddr)) {
             if (atoi(leaseDuration) == 0) {
                 printf("OK (Permanent)" NL);
@@ -747,18 +747,18 @@ void ResetLogFile()
 {
     char oldLogFilePath[MAX_PATH + 1];
     char currentLogFilePath[MAX_PATH + 1];
-	char timeString[MAX_PATH + 1] = {};
-	SYSTEMTIME time;
+    char timeString[MAX_PATH + 1] = {};
+    SYSTEMTIME time;
 
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
     ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
 
-	// Close the existing stdout handle. This is important because otherwise
-	// it may still be open as stdout when we try to MoveFileEx below.
-	fclose(stdout);
+    // Close the existing stdout handle. This is important because otherwise
+    // it may still be open as stdout when we try to MoveFileEx below.
+    fclose(stdout);
 
-	// Rotate the current to the old log file
-	MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
+    // Rotate the current to the old log file
+    MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
 
     // Redirect stdout to this new file
     freopen(currentLogFilePath, "w", stdout);
@@ -766,10 +766,10 @@ void ResetLogFile()
     // Print a log header
     printf("Moonlight Internet Streaming Service v" VER_VERSION_STR NL);
 
-	// Print the current time
-	GetSystemTime(&time);
-	GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
-	printf("The current UTC time is: %s" NL, timeString);
+    // Print the current time
+    GetSystemTime(&time);
+    GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
+    printf("The current UTC time is: %s" NL, timeString);
 }
 
 DWORD WINAPI GameStreamStateChangeThread(PVOID Context)

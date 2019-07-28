@@ -34,8 +34,8 @@ static struct port_entry {
     {IPPROTO_UDP, 48000, true},
 
 #if 0
-	// These are not currently used, so let's
-	// avoid testing them for now.
+    // These are not currently used, so let's
+    // avoid testing them for now.
     {IPPROTO_UDP, 48002, true},
     {IPPROTO_UDP, 48010, true}
 #endif
@@ -67,8 +67,8 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
     fprintf(LOG_OUT, "%s\n", message);
 
     if (terminal) {
-		char logPath[MAX_PATH + 1];
-		FILE* f;
+        char logPath[MAX_PATH + 1];
+        FILE* f;
 
         fprintf(LOG_OUT, "--------------- CURRENT MISS LOG -------------------\n");
 
@@ -86,53 +86,53 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
             fprintf(LOG_OUT, "Failed to find current MISS log\n");
         }
 
-		fprintf(LOG_OUT, "\n----------------- OLD MISS LOG ---------------------\n");
+        fprintf(LOG_OUT, "\n----------------- OLD MISS LOG ---------------------\n");
 
-		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", logPath, sizeof(logPath));
-		f = fopen(logPath, "r");
-		if (f != nullptr) {
-			char buffer[1024];
-			while (!feof(f)) {
-				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, LOG_OUT);
-			}
-			fclose(f);
-		}
-		else {
-			fprintf(LOG_OUT, "Failed to find old MISS log\n");
-		}
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", logPath, sizeof(logPath));
+        f = fopen(logPath, "r");
+        if (f != nullptr) {
+            char buffer[1024];
+            while (!feof(f)) {
+                int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+                fwrite(buffer, 1, bytesRead, LOG_OUT);
+            }
+            fclose(f);
+        }
+        else {
+            fprintf(LOG_OUT, "Failed to find old MISS log\n");
+        }
 
-		fprintf(LOG_OUT, "--------------- CURRENT GSV6FWD LOG -------------------\n");
+        fprintf(LOG_OUT, "--------------- CURRENT GSV6FWD LOG -------------------\n");
 
-		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-current.log", logPath, sizeof(logPath));
-		f = fopen(logPath, "r");
-		if (f != nullptr) {
-			char buffer[1024];
-			while (!feof(f)) {
-				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, LOG_OUT);
-			}
-			fclose(f);
-		}
-		else {
-			fprintf(LOG_OUT, "Failed to find current GSv6Fwd log\n");
-		}
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-current.log", logPath, sizeof(logPath));
+        f = fopen(logPath, "r");
+        if (f != nullptr) {
+            char buffer[1024];
+            while (!feof(f)) {
+                int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+                fwrite(buffer, 1, bytesRead, LOG_OUT);
+            }
+            fclose(f);
+        }
+        else {
+            fprintf(LOG_OUT, "Failed to find current GSv6Fwd log\n");
+        }
 
-		fprintf(LOG_OUT, "\n----------------- OLD GSV6FWD LOG ---------------------\n");
+        fprintf(LOG_OUT, "\n----------------- OLD GSV6FWD LOG ---------------------\n");
 
-		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-old.log", logPath, sizeof(logPath));
-		f = fopen(logPath, "r");
-		if (f != nullptr) {
-			char buffer[1024];
-			while (!feof(f)) {
-				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, LOG_OUT);
-			}
-			fclose(f);
-		}
-		else {
-			fprintf(LOG_OUT, "Failed to find old GSv6Fwd log\n");
-		}
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-old.log", logPath, sizeof(logPath));
+        f = fopen(logPath, "r");
+        if (f != nullptr) {
+            char buffer[1024];
+            while (!feof(f)) {
+                int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
+                fwrite(buffer, 1, bytesRead, LOG_OUT);
+            }
+            fclose(f);
+        }
+        else {
+            fprintf(LOG_OUT, "Failed to find old GSv6Fwd log\n");
+        }
 
         fflush(LOG_OUT);
     }
@@ -302,20 +302,20 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
 
             FD_ZERO(&fds);
 
-			if (serverSock != INVALID_SOCKET) {
-				FD_SET(serverSock, &fds);
-			}
-			else {
-				FD_SET(clientSock, &fds);
-			}
+            if (serverSock != INVALID_SOCKET) {
+                FD_SET(serverSock, &fds);
+            }
+            else {
+                FD_SET(clientSock, &fds);
+            }
 
-			// If we have a server socket, listen for the accept() instead of the
-			// connect() so we can be compatible with the loopback relay.
+            // If we have a server socket, listen for the accept() instead of the
+            // connect() so we can be compatible with the loopback relay.
             timeout.tv_sec = 3;
             err = select(0,
-				serverSock != INVALID_SOCKET ? &fds : nullptr,
-				serverSock == INVALID_SOCKET ? &fds : nullptr,
-				nullptr, &timeout);
+                serverSock != INVALID_SOCKET ? &fds : nullptr,
+                serverSock == INVALID_SOCKET ? &fds : nullptr,
+                nullptr, &timeout);
             if (err == 1) {
                 // Our FD was signalled for connect() or accept() completion
                 fprintf(LOG_OUT, "Success\n");
@@ -339,18 +339,18 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     else {
         const char testMsg[] = "moonlight-test";
 
-		// Send several test packets to ensure a random lost packet doesn't make the test fail
-		for (int i = 0; i < 5; i++) {
-			err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
-			if (err == SOCKET_ERROR) {
-				fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
-				closesocket(clientSock);
-				closesocket(serverSock);
-				return PortTestError;
-			}
+        // Send several test packets to ensure a random lost packet doesn't make the test fail
+        for (int i = 0; i < 5; i++) {
+            err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
+            if (err == SOCKET_ERROR) {
+                fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
+                closesocket(clientSock);
+                closesocket(serverSock);
+                return PortTestError;
+            }
 
-			Sleep(200);
-		}
+            Sleep(200);
+        }
 
         struct timeval timeout = {};
         fd_set fds;
@@ -381,54 +381,54 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
 
 PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 {
-	HINTERNET hInternet;
-	HINTERNET hRequest;
-	char url[1024];
+    HINTERNET hInternet;
+    HINTERNET hRequest;
+    char url[1024];
 
-	hInternet = InternetOpenA("MIST", 0, nullptr, nullptr, 0);
-	if (hInternet == nullptr) {
-		fprintf(LOG_OUT, "InternetOpen() failed: %d\n", GetLastError());
-		return PortTestError;
-	}
+    hInternet = InternetOpenA("MIST", 0, nullptr, nullptr, 0);
+    if (hInternet == nullptr) {
+        fprintf(LOG_OUT, "InternetOpen() failed: %d\n", GetLastError());
+        return PortTestError;
+    }
 
-	char addrStr[64];
-	inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+    char addrStr[64];
+    inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
 
-	sprintf(url, "%s://%s:%d/",
-		port == 47989 ? "http" : "https",
-		addrStr,
-		port);
+    sprintf(url, "%s://%s:%d/",
+        port == 47989 ? "http" : "https",
+        addrStr,
+        port);
 
-	hRequest = InternetOpenUrlA(hInternet, url, nullptr, 0,
-		INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_NO_UI | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_RELOAD,
-		NULL);
-	if (hRequest == nullptr) {
-		if (GetLastError() == ERROR_INTERNET_CLIENT_AUTH_CERT_NEEDED) {
-			// This is expected for our HTTPS connection
-			fprintf(LOG_OUT, "Success\n");
-		}
-		else {
-			// CANNOT_CONNECT is the "expected" error
-			if (GetLastError() == ERROR_INTERNET_CANNOT_CONNECT) {
-				fprintf(LOG_OUT, "Failed\n");
-			}
-			else {
-				fprintf(LOG_OUT, "Failed: %d\n", GetLastError());
-			}
+    hRequest = InternetOpenUrlA(hInternet, url, nullptr, 0,
+        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_NO_UI | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_RELOAD,
+        NULL);
+    if (hRequest == nullptr) {
+        if (GetLastError() == ERROR_INTERNET_CLIENT_AUTH_CERT_NEEDED) {
+            // This is expected for our HTTPS connection
+            fprintf(LOG_OUT, "Success\n");
+        }
+        else {
+            // CANNOT_CONNECT is the "expected" error
+            if (GetLastError() == ERROR_INTERNET_CANNOT_CONNECT) {
+                fprintf(LOG_OUT, "Failed\n");
+            }
+            else {
+                fprintf(LOG_OUT, "Failed: %d\n", GetLastError());
+            }
 
-			InternetCloseHandle(hInternet);
-			return PortTestError;
-		}
-	}
-	else {
-		fprintf(LOG_OUT, "Success\n");
-		InternetCloseHandle(hRequest);
-	}
+            InternetCloseHandle(hInternet);
+            return PortTestError;
+        }
+    }
+    else {
+        fprintf(LOG_OUT, "Success\n");
+        InternetCloseHandle(hRequest);
+    }
 
 
-	InternetCloseHandle(hInternet);
+    InternetCloseHandle(hInternet);
 
-	return PortTestOk;
+    return PortTestOk;
 }
 
 bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool consolePrint)
@@ -440,22 +440,22 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool co
             k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
             k_Ports[i].port);
 
-		if (consolePrint) {
-			fprintf(CONSOLE_OUT, "\tTesting %s %d...\n",
-				k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
-				k_Ports[i].port);
-		}
+        if (consolePrint) {
+            fprintf(CONSOLE_OUT, "\tTesting %s %d...\n",
+                k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
+                k_Ports[i].port);
+        }
 
-		PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
 
-		if (status != PortTestError && !k_Ports[i].withServer) {
-			// Test using a real HTTP client if the port wasn't totally dead.
-			// This is required to confirm functionality with the loopback relay.
-			// TestHttpPort() can take significantly longer to timeout than TestPort(),
-			// so we only do this test if we believe we're likely to get a response.
-			fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
-			status = TestHttpPort(addr, k_Ports[i].port);
-		}
+        if (status != PortTestError && !k_Ports[i].withServer) {
+            // Test using a real HTTP client if the port wasn't totally dead.
+            // This is required to confirm functionality with the loopback relay.
+            // TestHttpPort() can take significantly longer to timeout than TestPort(),
+            // so we only do this test if we believe we're likely to get a response.
+            fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
+            status = TestHttpPort(addr, k_Ports[i].port);
+        }
 
         if (status != PortTestOk) {
             // If we got an unknown result, assume it matches with whatever
@@ -750,8 +750,8 @@ bool IsDoubleNAT(PSOCKADDR_IN wanAddr)
 int main(int argc, char* argv[])
 {
     WSADATA wsaData;
-	SYSTEMTIME time;
-	char timeString[MAX_PATH + 1] = {};
+    SYSTEMTIME time;
+    char timeString[MAX_PATH + 1] = {};
 
     char tempPath[MAX_PATH + 1];
     GetTempPathA(sizeof(tempPath), tempPath);
@@ -762,10 +762,10 @@ int main(int argc, char* argv[])
     // Print a log header
     fprintf(LOG_OUT, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n");
 
-	// Print the current time
-	GetSystemTime(&time);
-	GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
-	fprintf(LOG_OUT, "The current UTC time is: %s\n", timeString);
+    // Print the current time
+    GetSystemTime(&time);
+    GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
+    fprintf(LOG_OUT, "The current UTC time is: %s\n", timeString);
 
     // Print a console header
     fprintf(CONSOLE_OUT, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n\n");
@@ -829,7 +829,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-	fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
 
     // Detect a double NAT by detecting STUN and and UPnP mismatches
     if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
@@ -858,27 +858,27 @@ int main(int argc, char* argv[])
             snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
         }
-		else {
-			struct hostent* host;
+        else {
+            struct hostent* host;
 
-			// We can get here if the router doesn't support NAT reflection.
-			// We'll need to call out to our loopback server to get a second opinion.
+            // We can get here if the router doesn't support NAT reflection.
+            // We'll need to call out to our loopback server to get a second opinion.
 
-			fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
+            fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
 
-			fprintf(LOG_OUT, "Testing GameStream ports via loopback server\n");
+            fprintf(LOG_OUT, "Testing GameStream ports via loopback server\n");
 
-			host = gethostbyname("loopback.moonlight-stream.org");
-			if (host != nullptr) {
-				sin.sin_addr = *(struct in_addr*)host->h_addr;
-				if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf), true)) {
-					goto AllTestsPassed;
-				}
-			}
-			else {
-				fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
-			}
-		}
+            host = gethostbyname("loopback.moonlight-stream.org");
+            if (host != nullptr) {
+                sin.sin_addr = *(struct in_addr*)host->h_addr;
+                if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf), true)) {
+                    goto AllTestsPassed;
+                }
+            }
+            else {
+                fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
+            }
+        }
 
         snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
@@ -887,8 +887,8 @@ int main(int argc, char* argv[])
 
 AllTestsPassed:
     snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to stream over the Internet!\n\n"
-		"For the easiest setup, you should pair Moonlight to your PC from your home network before trying to stream over the Internet.\n\n"
-		"If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
+        "For the easiest setup, you should pair Moonlight to your PC from your home network before trying to stream over the Internet.\n\n"
+        "If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
     DisplayMessage(msgBuf, nullptr, MpInfo);
 
     return 0;
