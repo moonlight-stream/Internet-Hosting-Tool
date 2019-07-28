@@ -6,7 +6,7 @@
     <ProductVersion>3.10</ProductVersion>
     <ProjectGuid>a2ce5056-1114-44b9-b79b-952ef46d3d50</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>mish_setup</OutputName>
+    <OutputName>InternetHostingToolSetup</OutputName>
     <OutputType>Bundle</OutputType>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
