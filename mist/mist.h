@@ -11,7 +11,7 @@
 
 #include "..\version.h"
 
-#define CONSOLE_OUT stderr
-#define LOG_OUT stdout
+#define CONSOLE_OUT stdout
+#define LOG_OUT stderr
 
 bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN wanAddr);
