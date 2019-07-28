@@ -425,7 +425,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 	return PortTestOk;
 }
 
-bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
+bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool consolePrint)
 {
     bool ret = true;
 
@@ -433,9 +433,14 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
         fprintf(LOG_OUT, "Testing %s %d...",
             k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
             k_Ports[i].port);
-		PortTestStatus status;
-		
-		status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+
+		if (consolePrint) {
+			fprintf(CONSOLE_OUT, "\tTesting %s %d...\n",
+				k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
+				k_Ports[i].port);
+		}
+
+		PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
 
 		if (status != PortTestError && !k_Ports[i].withServer) {
 			// Test using a real HTTP client if the port wasn't totally dead.
@@ -787,7 +792,7 @@ int main(int argc, char* argv[])
     sin.sin_family = AF_INET;
     sin.sin_addr = in4addr_loopback;
     fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -803,7 +808,7 @@ int main(int argc, char* argv[])
 
     // Try to connect via LAN IPv4 address
     fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -818,25 +823,25 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+	fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
+
     // Detect a double NAT by detecting STUN and and UPnP mismatches
     if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
         fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
 
         // We don't actually care about the outcome here but it's nice to have in logs
         // to determine whether solving the double NAT will actually make Moonlight work.
-        TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf));
+        TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false);
 
         fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
     }
-
-    fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
 
     char wanAddrStr[64];
     inet_ntop(AF_INET, &sin.sin_addr, wanAddrStr, sizeof(wanAddrStr));
 
     // Try to connect via WAN IPv4 address
     fprintf(LOG_OUT, "Testing GameStream ports via STUN-reported WAN address\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
         // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
         // we probably would not have even gotten past STUN.
         if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) {
@@ -853,12 +858,14 @@ int main(int argc, char* argv[])
 			// We can get here if the router doesn't support NAT reflection.
 			// We'll need to call out to our loopback server to get a second opinion.
 
+			fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
+
 			fprintf(LOG_OUT, "Testing GameStream ports via loopback server\n");
 
 			host = gethostbyname("loopback.moonlight-stream.org");
 			if (host != nullptr) {
 				sin.sin_addr = *(struct in_addr*)host->h_addr;
-				if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf))) {
+				if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf), true)) {
 					goto AllTestsPassed;
 				}
 			}
