@@ -26,6 +26,9 @@
     <ClInclude Include="..\version.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mist.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="mist.rc">

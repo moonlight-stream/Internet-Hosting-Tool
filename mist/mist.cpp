@@ -1,19 +1,11 @@
-#define _CRT_RAND_S
-#define _CRT_SECURE_NO_WARNINGS
-#include <stdlib.h>
+#include "mist.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include <Windows.h>
-#include <WinSock2.h>
 #include <Ws2tcpip.h>
 #include <stdio.h>
 #include <assert.h>
 #include <shellapi.h>
 #include <objbase.h>
 #include <WinInet.h>
-
-#include "..\version.h"
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -28,8 +20,6 @@
 
 #define NATPMP_STATICLIB
 #include <natpmp.h>
-
-bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN wanAddr);
 
 static struct port_entry {
     int proto;
@@ -74,13 +64,13 @@ VOID CALLBACK MsgBoxHelpCallback(LPHELPINFO lpHelpInfo)
 
 void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessagePriority priority = MpError, bool terminal = true)
 {
-    printf("%s\n", message);
+    fprintf(LOG_OUT, "%s\n", message);
 
     if (terminal) {
 		char logPath[MAX_PATH + 1];
 		FILE* f;
 
-        printf("--------------- CURRENT MISS LOG -------------------\n");
+        fprintf(LOG_OUT, "--------------- CURRENT MISS LOG -------------------\n");
 
         ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", logPath, sizeof(logPath));
         f = fopen(logPath, "r");
@@ -88,15 +78,15 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
             char buffer[1024];
             while (!feof(f)) {
                 int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-                fwrite(buffer, 1, bytesRead, stdout);
+                fwrite(buffer, 1, bytesRead, LOG_OUT);
             }
             fclose(f);
         }
         else {
-            printf("Failed to find current MISS log\n");
+            fprintf(LOG_OUT, "Failed to find current MISS log\n");
         }
 
-		printf("\n----------------- OLD MISS LOG ---------------------\n");
+		fprintf(LOG_OUT, "\n----------------- OLD MISS LOG ---------------------\n");
 
 		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", logPath, sizeof(logPath));
 		f = fopen(logPath, "r");
@@ -104,15 +94,15 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 			char buffer[1024];
 			while (!feof(f)) {
 				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, stdout);
+				fwrite(buffer, 1, bytesRead, LOG_OUT);
 			}
 			fclose(f);
 		}
 		else {
-			printf("Failed to find old MISS log\n");
+			fprintf(LOG_OUT, "Failed to find old MISS log\n");
 		}
 
-		printf("--------------- CURRENT GSV6FWD LOG -------------------\n");
+		fprintf(LOG_OUT, "--------------- CURRENT GSV6FWD LOG -------------------\n");
 
 		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-current.log", logPath, sizeof(logPath));
 		f = fopen(logPath, "r");
@@ -120,15 +110,15 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 			char buffer[1024];
 			while (!feof(f)) {
 				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, stdout);
+				fwrite(buffer, 1, bytesRead, LOG_OUT);
 			}
 			fclose(f);
 		}
 		else {
-			printf("Failed to find current GSv6Fwd log\n");
+			fprintf(LOG_OUT, "Failed to find current GSv6Fwd log\n");
 		}
 
-		printf("\n----------------- OLD GSV6FWD LOG ---------------------\n");
+		fprintf(LOG_OUT, "\n----------------- OLD GSV6FWD LOG ---------------------\n");
 
 		ExpandEnvironmentStringsA("%ProgramData%\\MISS\\GSv6Fwd-old.log", logPath, sizeof(logPath));
 		f = fopen(logPath, "r");
@@ -136,15 +126,15 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 			char buffer[1024];
 			while (!feof(f)) {
 				int bytesRead = fread(buffer, 1, ARRAYSIZE(buffer), f);
-				fwrite(buffer, 1, bytesRead, stdout);
+				fwrite(buffer, 1, bytesRead, LOG_OUT);
 			}
 			fclose(f);
 		}
 		else {
-			printf("Failed to find old GSv6Fwd log\n");
+			fprintf(LOG_OUT, "Failed to find old GSv6Fwd log\n");
 		}
 
-        fflush(stdout);
+        fflush(LOG_OUT);
     }
 
     MSGBOXPARAMSA msgParams;
@@ -196,7 +186,7 @@ bool IsGameStreamEnabled()
 
     error = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\NVIDIA Corporation\\NvStream", 0, KEY_READ | KEY_WOW64_64KEY, &key);
     if (error != ERROR_SUCCESS) {
-        printf("RegOpenKeyEx() failed: %d\n", error);
+        fprintf(LOG_OUT, "RegOpenKeyEx() failed: %d\n", error);
         DisplayMessage("GeForce Experience was not detected on this PC. Make sure you're installing this utility on your GeForce GameStream-compatible PC, not the device running Moonlight.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
         return false;
@@ -208,14 +198,14 @@ bool IsGameStreamEnabled()
     if (error != ERROR_SUCCESS || !enabled) {
         // GFE may not even write EnableStreaming until the user enables GameStream for the first time
         if (error != ERROR_SUCCESS) {
-            printf("RegQueryValueExA() failed: %d\n", error);
+            fprintf(LOG_OUT, "RegQueryValueExA() failed: %d\n", error);
         }
         DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
         return false;
     }
     else {
-        printf("GeForce Experience installed and GameStream is enabled\n");
+        fprintf(LOG_OUT, "GeForce Experience installed and GameStream is enabled\n");
         return true;
     }
 }
@@ -232,14 +222,14 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
 
     clientSock = socket(addr->ss_family, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
     if (clientSock == INVALID_SOCKET) {
-        printf("socket() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
         return PortTestError;
     }
 
     if (withServer) {
         serverSock = socket(addr->ss_family, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
         if (serverSock == INVALID_SOCKET) {
-            printf("socket() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
             closesocket(clientSock);
             return PortTestError;
         }
@@ -258,14 +248,14 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
                 }
                 else {
                     // We can't continue to test for UDP ports.
-                    printf("Unknown (in use)\n");
+                    fprintf(LOG_OUT, "Unknown (in use)\n");
                     closesocket(clientSock);
                     closesocket(serverSock);
                     return PortTestUnknown;
                 }
             }
             else {
-                printf("bind() failed: %d\n", WSAGetLastError());
+                fprintf(LOG_OUT, "bind() failed: %d\n", WSAGetLastError());
                 closesocket(clientSock);
                 closesocket(serverSock);
                 return PortTestError;
@@ -275,7 +265,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         if (proto == IPPROTO_TCP && serverSock != INVALID_SOCKET) {
             err = listen(serverSock, 1);
             if (err == SOCKET_ERROR) {
-                printf("listen() failed: %d\n", WSAGetLastError());
+                fprintf(LOG_OUT, "listen() failed: %d\n", WSAGetLastError());
                 closesocket(clientSock);
                 closesocket(serverSock);
                 return PortTestError;
@@ -286,7 +276,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     ULONG nbIo = 1;
     err = ioctlsocket(clientSock, FIONBIO, &nbIo);
     if (err == SOCKET_ERROR) {
-        printf("ioctlsocket() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "ioctlsocket() failed: %d\n", WSAGetLastError());
         closesocket(clientSock);
         if (serverSock != INVALID_SOCKET) {
             closesocket(serverSock);
@@ -304,7 +294,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     if (proto == IPPROTO_TCP) {
         err = connect(clientSock, (struct sockaddr*)&sin6, addrLen);
         if (err == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) {
-            printf("connect() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "connect() failed: %d\n", WSAGetLastError());
         }
         else {
             struct timeval timeout = {};
@@ -328,14 +318,14 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
 				nullptr, &timeout);
             if (err == 1) {
                 // Our FD was signalled for connect() or accept() completion
-                printf("Success\n");
+                fprintf(LOG_OUT, "Success\n");
             }
             else if (err == 0) {
                 // Timed out
-                printf("Timeout\n");
+                fprintf(LOG_OUT, "Timeout\n");
             }
             else {
-                printf("select() failed: %d\n", WSAGetLastError());
+                fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
             }
         }
 
@@ -350,7 +340,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         const char testMsg[] = "moonlight-test";
         err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
         if (err == SOCKET_ERROR) {
-            printf("sendto() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
             closesocket(clientSock);
             closesocket(serverSock);
             return PortTestError;
@@ -366,14 +356,14 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         err = select(0, &fds, nullptr, nullptr, &timeout);
         if (err == 1) {
             // Our FD was signalled for data available
-            printf("Success\n");
+            fprintf(LOG_OUT, "Success\n");
         }
         else if (err == 0) {
             // Timed out
-            printf("Timeout\n");
+            fprintf(LOG_OUT, "Timeout\n");
         }
         else {
-            printf("select() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
         }
 
         closesocket(clientSock);
@@ -391,7 +381,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 
 	hInternet = InternetOpenA("MIST", 0, nullptr, nullptr, 0);
 	if (hInternet == nullptr) {
-		printf("InternetOpen() failed: %d\n", GetLastError());
+		fprintf(LOG_OUT, "InternetOpen() failed: %d\n", GetLastError());
 		return PortTestError;
 	}
 
@@ -409,15 +399,15 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 	if (hRequest == nullptr) {
 		if (GetLastError() == ERROR_INTERNET_CLIENT_AUTH_CERT_NEEDED) {
 			// This is expected for our HTTPS connection
-			printf("Success\n");
+			fprintf(LOG_OUT, "Success\n");
 		}
 		else {
 			// CANNOT_CONNECT is the "expected" error
 			if (GetLastError() == ERROR_INTERNET_CANNOT_CONNECT) {
-				printf("Failed\n");
+				fprintf(LOG_OUT, "Failed\n");
 			}
 			else {
-				printf("Failed: %d\n", GetLastError());
+				fprintf(LOG_OUT, "Failed: %d\n", GetLastError());
 			}
 
 			InternetCloseHandle(hInternet);
@@ -425,7 +415,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 		}
 	}
 	else {
-		printf("Success\n");
+		fprintf(LOG_OUT, "Success\n");
 		InternetCloseHandle(hRequest);
 	}
 
@@ -440,7 +430,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
     bool ret = true;
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-        printf("Testing %s %d...",
+        fprintf(LOG_OUT, "Testing %s %d...",
             k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
             k_Ports[i].port);
 		PortTestStatus status;
@@ -452,7 +442,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen)
 			// This is required to confirm functionality with the loopback relay.
 			// TestHttpPort() can take significantly longer to timeout than TestPort(),
 			// so we only do this test if we believe we're likely to get a response.
-			printf("Testing TCP %d with HTTP traffic...", k_Ports[i].port);
+			fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
 			status = TestHttpPort(addr, k_Ports[i].port);
 		}
 
@@ -480,17 +470,17 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
     SOCKET s;
     struct hostent* host;
 
-    printf("Finding local IP address...");
+    fprintf(LOG_OUT, "Finding local IP address...");
 
     host = gethostbyname("moonlight-stream.org");
     if (host == nullptr) {
-        printf("gethostbyname() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
         return false;
     }
 
     s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == INVALID_SOCKET) {
-        printf("socket() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
         return false;
     }
 
@@ -500,7 +490,7 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
     sin.sin_addr = *(struct in_addr*)host->h_addr;
     int err = connect(s, (struct sockaddr*)&sin, sizeof(sin));
     if (err == SOCKET_ERROR) {
-        printf("connect() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "connect() failed: %d\n", WSAGetLastError());
         closesocket(s);
         return false;
     }
@@ -509,14 +499,14 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
     int nameLen = sizeof(*addr);
     err = getsockname(s, (struct sockaddr*)addr, &nameLen);
     if (err == SOCKET_ERROR) {
-        printf("getsockname() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "getsockname() failed: %d\n", WSAGetLastError());
         closesocket(s);
         return false;
     }
 
     char addrStr[64];
     inet_ntop(AF_INET, &addr->sin_addr, addrStr, sizeof(addrStr));
-    printf("%s\n", addrStr);
+    fprintf(LOG_OUT, "%s\n", addrStr);
 
     return true;
 }
@@ -551,28 +541,28 @@ UPnPPortStatus UPnPCheckPort(struct UPNPUrls* urls, struct IGDdatas* data, int p
         return ERRORED;
     }
 
-    printf("Checking for UPnP port mapping for %s %s -> %s...", protoStr, portStr, myAddr);
+    fprintf(LOG_OUT, "Checking for UPnP port mapping for %s %s -> %s...", protoStr, portStr, myAddr);
     int err = UPNP_GetSpecificPortMappingEntry(
         urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr,
         intClient, intPort, desc, enabled, leaseDuration);
     if (err == 714) {
         // NoSuchEntryInArray
-        printf("NOT FOUND\n");
+        fprintf(LOG_OUT, "NOT FOUND\n");
         return NOT_FOUND;
     }
     else if (err == UPNPCOMMAND_SUCCESS) {
         if (!strcmp(myAddr, intClient)) {
-            printf("OK\n");
+            fprintf(LOG_OUT, "OK\n");
             return OK;
         }
         else {
-            printf("CONFLICT - %s %s\n", desc, intClient);
+            fprintf(LOG_OUT, "CONFLICT - %s %s\n", desc, intClient);
             snprintf(conflictMessage, 128, "%s (%s)", desc, intClient);
             return CONFLICTED;
         }
     }
     else {
-        printf("ERROR %d\n", err);
+        fprintf(LOG_OUT, "ERROR %d\n", err);
         return ERRORED;
     }
 }
@@ -588,12 +578,12 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     bool gotReportedWanAddress = false;
     int natPmpErr = initnatpmp(&natpmp, 0, 0);
     if (natPmpErr != 0) {
-        printf("initnatpmp() failed: %d\n", natPmpErr);
+        fprintf(LOG_OUT, "initnatpmp() failed: %d\n", natPmpErr);
     }
     else {
         natPmpErr = sendpublicaddressrequest(&natpmp);
         if (natPmpErr < 0) {
-            printf("sendpublicaddressrequest() failed: %d\n", natPmpErr);
+            fprintf(LOG_OUT, "sendpublicaddressrequest() failed: %d\n", natPmpErr);
             closenatpmp(&natpmp);
         }
     }
@@ -614,19 +604,19 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
                 if (ret == 2) {
                     *igdDisconnected = true;
                 }
-                printf("Discovered UPnP IGD at: %s\n", urls.controlURL);
-                printf("Detecting WAN IP address via UPnP...");
+                fprintf(LOG_OUT, "Discovered UPnP IGD at: %s\n", urls.controlURL);
+                fprintf(LOG_OUT, "Detecting WAN IP address via UPnP...");
                 ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddrStr);
                 if (ret == UPNPCOMMAND_SUCCESS && strlen(wanAddrStr) > 0) {
                     reportedWanAddr->sin_addr.S_un.S_addr = inet_addr(wanAddrStr);
-                    printf("%s\n", wanAddrStr);
+                    fprintf(LOG_OUT, "%s\n", wanAddrStr);
 
                     if (reportedWanAddr->sin_addr.S_un.S_addr != 0) {
                         gotReportedWanAddress = true;
                     }
                 }
                 else {
-                    printf("FAILED %d\n", ret);
+                    fprintf(LOG_OUT, "FAILED %d\n", ret);
                 }
 
                 char conflictMessage[512];
@@ -652,19 +642,19 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
                 }
             }
             else {
-                printf("No UPnP IGD detected\n");
+                fprintf(LOG_OUT, "No UPnP IGD detected\n");
             }
 
             FreeUPNPUrls(&urls);
         }
         else {
-            printf("No UPnP devices detected\n");
+            fprintf(LOG_OUT, "No UPnP devices detected\n");
         }
     }
 
     // Use the delay of upnpDiscoverAll() to also allow the NAT-PMP endpoint time to respond
     if (natPmpErr >= 0) {
-        printf("Detecting WAN IP address via NAT-PMP...");
+        fprintf(LOG_OUT, "Detecting WAN IP address via NAT-PMP...");
 
         natpmpresp_t response;
         natPmpErr = readnatpmpresponseorretry(&natpmp, &response);
@@ -674,7 +664,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
             char addrStr[64];
             reportedWanAddr->sin_addr = response.pnu.publicaddress.addr;
             inet_ntop(AF_INET, &response.pnu.publicaddress.addr, addrStr, sizeof(addrStr));
-            printf("%s\n", addrStr);
+            fprintf(LOG_OUT, "%s\n", addrStr);
             if (reportedWanAddr->sin_addr.S_un.S_addr != 0) {
                 gotReportedWanAddress = true;
                 
@@ -686,11 +676,11 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
             }
         }
         else {
-            printf("FAILED %d\n", natPmpErr);
+            fprintf(LOG_OUT, "FAILED %d\n", natPmpErr);
         }
     }
 
-    printf("Detecting WAN IP address via STUN...");
+    fprintf(LOG_OUT, "Detecting WAN IP address via STUN...");
     if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr) && !getExternalAddressPortIP4(IPPROTO_TCP, 0, wanAddr)) {
         DisplayMessage("Unable to determine your public IP address. Please check your Internet connection or try again in a few minutes.");
         return false;
@@ -698,7 +688,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     else {
         char addrStr[64];
         inet_ntop(AF_INET, &wanAddr->sin_addr, addrStr, sizeof(addrStr));
-        printf("%s\n", addrStr);
+        fprintf(LOG_OUT, "%s\n", addrStr);
 
         if (!gotReportedWanAddress) {
             // If we didn't get anything from UPnP or NAT-PMP, just populate the reported
@@ -756,18 +746,18 @@ int main(int argc, char* argv[])
     GetTempPathA(sizeof(tempPath), tempPath);
 
     snprintf(logFilePath, sizeof(logFilePath), "%s\\%s", tempPath, "mis-test.log");
-    freopen(logFilePath, "w", stdout);
+    freopen(logFilePath, "w", LOG_OUT);
 
     // Print a log header
-    printf("Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n");
+    fprintf(LOG_OUT, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n");
 
 	// Print the current time
 	GetSystemTime(&time);
 	GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
-	printf("The current UTC time is: %s\n", timeString);
+	fprintf(LOG_OUT, "The current UTC time is: %s\n", timeString);
 
     // Print a console header
-    fprintf(stderr, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n\n");
+    fprintf(CONSOLE_OUT, "Moonlight Internet Streaming Tester v" VER_VERSION_STR "\n\n");
 
     int err = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (err != NO_ERROR) {
@@ -775,7 +765,7 @@ int main(int argc, char* argv[])
         return err;
     }
 
-    fprintf(stderr, "Checking if GameStream is enabled...\n");
+    fprintf(CONSOLE_OUT, "Checking if GameStream is enabled...\n");
 
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
@@ -790,13 +780,13 @@ int main(int argc, char* argv[])
     char msgBuf[2048];
     char portMsgBuf[512];
 
-    fprintf(stderr, "Testing GameStream connectivity on this PC...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream connectivity on this PC...\n");
 
     // Try to connect via IPv4 loopback
     ss = {};
     sin.sin_family = AF_INET;
     sin.sin_addr = in4addr_loopback;
-    printf("Testing GameStream ports via loopback\n");
+    fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
@@ -809,10 +799,10 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    fprintf(stderr, "Testing GameStream connectivity on your local network...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream connectivity on your local network...\n");
 
     // Try to connect via LAN IPv4 address
-    printf("Testing GameStream ports via local network\n");
+    fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
@@ -820,7 +810,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    fprintf(stderr, "Detecting public IP address...\n");
+    fprintf(CONSOLE_OUT, "Detecting public IP address...\n");
 
     bool rulesFound, igdDisconnected;
     SOCKADDR_IN locallyReportedWanAddr;
@@ -830,22 +820,22 @@ int main(int argc, char* argv[])
 
     // Detect a double NAT by detecting STUN and and UPnP mismatches
     if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
-        printf("Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
+        fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
 
         // We don't actually care about the outcome here but it's nice to have in logs
         // to determine whether solving the double NAT will actually make Moonlight work.
         TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf));
 
-        printf("Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
+        fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
     }
 
-    fprintf(stderr, "Testing GameStream connectivity over the Internet...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
 
     char wanAddrStr[64];
     inet_ntop(AF_INET, &sin.sin_addr, wanAddrStr, sizeof(wanAddrStr));
 
     // Try to connect via WAN IPv4 address
-    printf("Testing GameStream ports via STUN-reported WAN address\n");
+    fprintf(LOG_OUT, "Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf))) {
         // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
         // we probably would not have even gotten past STUN.
@@ -863,7 +853,7 @@ int main(int argc, char* argv[])
 			// We can get here if the router doesn't support NAT reflection.
 			// We'll need to call out to our loopback server to get a second opinion.
 
-			printf("Testing GameStream ports via loopback server\n");
+			fprintf(LOG_OUT, "Testing GameStream ports via loopback server\n");
 
 			host = gethostbyname("loopback.moonlight-stream.org");
 			if (host != nullptr) {
@@ -873,7 +863,7 @@ int main(int argc, char* argv[])
 				}
 			}
 			else {
-				printf("gethostbyname() failed: %d\n", WSAGetLastError());
+				fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
 			}
 		}
 

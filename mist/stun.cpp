@@ -1,11 +1,4 @@
-#define _CRT_RAND_S
-#define _CRT_SECURE_NO_WARNINGS
-#include <stdlib.h>
-
-#define WIN32_LEAN_AND_MEAN
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include <Windows.h>
-#include <WinSock2.h>
+#include "mist.h"
 
 #include <stdio.h>
 
@@ -63,13 +56,13 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
 
     host = gethostbyname("stun.moonlight-stream.org");
     if (host == nullptr) {
-        printf("gethostbyname() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
         return false;
     }
 
     sock = socket(AF_INET, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
     if (sock == INVALID_SOCKET) {
-        printf("socket() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
         return false;
     }
 
@@ -77,7 +70,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
     bindAddr.sin_family = AF_INET;
     bindAddr.sin_port = htons(localPort);
     if (bind(sock, (struct sockaddr*)&bindAddr, sizeof(bindAddr)) == SOCKET_ERROR) {
-        printf("bind() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "bind() failed: %d\n", WSAGetLastError());
         closesocket(sock);
         return false;
     }
@@ -96,7 +89,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
 
     // We'll connect() even for UDP so we can use send()/recv() and share more code
     if (connect(sock, (struct sockaddr*)&stunAddr, sizeof(stunAddr)) == SOCKET_ERROR) {
-        printf("connect() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "connect() failed: %d\n", WSAGetLastError());
         closesocket(sock);
         return false;
     }
@@ -116,7 +109,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
     for (i = 0; i < tries; i++) {
         // Retransmit the request every second until the timeout elapses
         if (send(sock, (char *)&reqMsg, sizeof(reqMsg), 0) == SOCKET_ERROR) {
-            printf("send() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "send() failed: %d\n", WSAGetLastError());
             closesocket(sock);
             return false;
         }
@@ -135,7 +128,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
             continue;
         }
         else if (selectRes == SOCKET_ERROR) {
-            printf("select() failed: %d\n", WSAGetLastError());
+            fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
             closesocket(sock);
             return false;
         }
@@ -148,27 +141,27 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
     closesocket(sock);
 
     if (bytesRead == 0) {
-        printf("No response from STUN server\n");
+        fprintf(LOG_OUT, "No response from STUN server\n");
         return false;
     }
     else if (bytesRead == SOCKET_ERROR) {
-        printf("Failed to read STUN binding response: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "Failed to read STUN binding response: %d\n", WSAGetLastError());
         return false;
     }
     else if (bytesRead < sizeof(resp.hdr)) {
-        printf("STUN message truncated: %d\n", bytesRead);
+        fprintf(LOG_OUT, "STUN message truncated: %d\n", bytesRead);
         return false;
     }
     else if (htonl(resp.hdr.magicCookie) != STUN_MESSAGE_COOKIE) {
-        printf("Bad STUN cookie value: %x\n", htonl(resp.hdr.magicCookie));
+        fprintf(LOG_OUT, "Bad STUN cookie value: %x\n", htonl(resp.hdr.magicCookie));
         return false;
     }
     else if (memcmp(reqMsg.transactionId, resp.hdr.transactionId, sizeof(reqMsg.transactionId))) {
-        printf("STUN transaction ID mismatch\n");
+        fprintf(LOG_OUT, "STUN transaction ID mismatch\n");
         return false;
     }
     else if (htons(resp.hdr.messageType) != STUN_MESSAGE_BINDING_SUCCESS) {
-        printf("STUN message type mismatch: %x\n", htons(resp.hdr.messageType));
+        fprintf(LOG_OUT, "STUN message type mismatch: %x\n", htons(resp.hdr.messageType));
         return false;
     }
 
@@ -176,7 +169,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
     bytesRead -= sizeof(resp.hdr);
     while (bytesRead > sizeof(*attribute)) {
         if (bytesRead < sizeof(*attribute) + htons(attribute->length)) {
-            printf("STUN attribute out of bounds: %d\n", htons(attribute->length));
+            fprintf(LOG_OUT, "STUN attribute out of bounds: %d\n", htons(attribute->length));
             return false;
         }
         // Mask off the comprehension bit
@@ -189,11 +182,11 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
 
         ipv4Attrib = (PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE)attribute;
         if (htons(ipv4Attrib->hdr.length) != 8) {
-            printf("STUN address length mismatch: %d\n", htons(ipv4Attrib->hdr.length));
+            fprintf(LOG_OUT, "STUN address length mismatch: %d\n", htons(ipv4Attrib->hdr.length));
             return false;
         }
         else if (ipv4Attrib->addressFamily != 1) {
-            printf("STUN address family mismatch: %x\n", ipv4Attrib->addressFamily);
+            fprintf(LOG_OUT, "STUN address family mismatch: %x\n", ipv4Attrib->addressFamily);
             return false;
         }
 
@@ -207,6 +200,6 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         return true;
     }
 
-    printf("No XOR mapped address found in STUN response!\n");
+    fprintf(LOG_OUT, "No XOR mapped address found in STUN response!\n");
     return false;
 }
