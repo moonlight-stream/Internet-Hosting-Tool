@@ -338,13 +338,19 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     }
     else {
         const char testMsg[] = "moonlight-test";
-        err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
-        if (err == SOCKET_ERROR) {
-            fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
-            closesocket(clientSock);
-            closesocket(serverSock);
-            return PortTestError;
-        }
+
+		// Send several test packets to ensure a random lost packet doesn't make the test fail
+		for (int i = 0; i < 5; i++) {
+			err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
+			if (err == SOCKET_ERROR) {
+				fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
+				closesocket(clientSock);
+				closesocket(serverSock);
+				return PortTestError;
+			}
+
+			Sleep(200);
+		}
 
         struct timeval timeout = {};
         fd_set fds;
