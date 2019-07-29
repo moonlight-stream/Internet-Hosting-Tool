@@ -227,7 +227,9 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     }
 
     if (withServer) {
-        serverSock = socket(addr->ss_family, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
+        // Even if we are testing IPv6, our server socket should still be on IPv4 to allow the
+        // IPv6 relay to do its job (since it's already bound to all GFE ports on v6)
+        serverSock = socket(AF_INET, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
         if (serverSock == INVALID_SOCKET) {
             fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
             closesocket(clientSock);
@@ -391,8 +393,16 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
         return PortTestError;
     }
 
-    char addrStr[64];
-    inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+    char addrStr[INET6_ADDRSTRLEN + 2];
+    if (addr->ss_family == AF_INET) {
+        inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+    }
+    else {
+        // The address string must be escaped for usage in URLs
+        addrStr[0] = '[';
+        inet_ntop(AF_INET6, &((struct sockaddr_in6*)addr)->sin6_addr, &addrStr[1], INET6_ADDRSTRLEN);
+        strcat_s(addrStr, "]");
+    }
 
     sprintf(url, "%s://%s:%d/",
         port == 47989 ? "http" : "https",
@@ -461,11 +471,13 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool co
             // If we got an unknown result, assume it matches with whatever
             // we've gotten so far.
             if (status == PortTestError || !ret) {
-                int msgLen = snprintf(portMsg, portMsgLen, "%s %d\n",
-                    k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
-                    k_Ports[i].port);
-                portMsg += msgLen;
-                portMsgLen -= msgLen;
+                if (portMsg != NULL && portMsgLen > 0) {
+                    int msgLen = snprintf(portMsg, portMsgLen, "%s %d\n",
+                        k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
+                        k_Ports[i].port);
+                    portMsg += msgLen;
+                    portMsgLen -= msgLen;
+                }
 
                 // Keep going to check all ports and report the failing ones
                 ret = false;
@@ -600,6 +612,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     }
 
     {
+        fprintf(CONSOLE_OUT, "\tTesting UPnP...\n");
+
         int upnpErr;
         struct UPNPDev* ipv4Devs = upnpDiscoverAll(5000, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 0, 2, &upnpErr);
 
@@ -665,6 +679,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
 
     // Use the delay of upnpDiscoverAll() to also allow the NAT-PMP endpoint time to respond
     if (natPmpErr >= 0) {
+        fprintf(CONSOLE_OUT, "\tTesting NAT-PMP...\n");
+
         fprintf(LOG_OUT, "Detecting WAN IP address via NAT-PMP...");
 
         natpmpresp_t response;
@@ -692,6 +708,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     }
 
     fprintf(LOG_OUT, "Detecting WAN IP address via STUN...");
+    fprintf(CONSOLE_OUT, "\tTesting STUN...\n");
+
     if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr) && !getExternalAddressPortIP4(IPPROTO_TCP, 0, wanAddr)) {
         DisplayMessage("Unable to determine your public IP address. Please check your Internet connection or try again in a few minutes.");
         return false;
@@ -854,40 +872,63 @@ int main(int argc, char* argv[])
             snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Click the Help button for guidance on fixing this issue.");
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#connected-through-another-router-error");
         }
-        else if (IsPossibleCGN(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
-            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
-        }
         else {
-            struct hostent* host;
+            struct addrinfo hint = {};
+            struct addrinfo* result;
 
             // We can get here if the router doesn't support NAT reflection.
             // We'll need to call out to our loopback server to get a second opinion.
 
-            fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
-
-            fprintf(LOG_OUT, "Testing GameStream ports via loopback server\n");
-
-            host = gethostbyname("loopback.moonlight-stream.org");
-            if (host != nullptr) {
-                sin.sin_addr = *(struct in_addr*)host->h_addr;
-                if (TestAllPorts((PSOCKADDR_STORAGE)&sin, portMsgBuf, sizeof(portMsgBuf), true)) {
-                    goto AllTestsPassed;
-                }
+            hint.ai_family = AF_UNSPEC;
+            hint.ai_flags = AI_ADDRCONFIG;
+            err = getaddrinfo("loopback.moonlight-stream.org", NULL, &hint, &result);
+            if (err != 0 || result == NULL) {
+                fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", WSAGetLastError());
             }
             else {
-                fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
+                // First try the relay server over IPv4. If this passes, it's considered a full success
+                fprintf(LOG_OUT, "Testing GameStream ports via IPv4 loopback server\n");
+                for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
+                    if (current->ai_family == AF_INET) {
+                        fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
+                        if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true)) {
+                            goto AllTestsPassed;
+                        }
+                    }
+                }
+
+                // If that fails, try the relay server over IPv6. If this passes, it will be a partial success
+                fprintf(LOG_OUT, "Testing GameStream ports via IPv6 loopback server\n");
+                for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
+                    if (current->ai_family == AF_INET6) {
+                        fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
+                        if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, NULL, 0, true)) {
+                            snprintf(msgBuf, sizeof(msgBuf), "This PC has limited connectivity for Internet hosting. It will work only for clients on certain networks.\n\n"
+                                "If you want to try streaming with this configuration, you must pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
+                                "To get full connectivity, please contact your ISP and ask for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
+                            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#limited-connectivity-for-hosting-error", MpWarn);
+                            return 0;
+                        }
+                    }
+                }
+            }
+
+            if (IsPossibleCGN(&locallyReportedWanAddr)) {
+                snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
+                DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
+            }
+            else {
+                snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+                DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
             }
         }
 
-        snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
-        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
         return -1;
     }
 
 AllTestsPassed:
-    snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to stream over the Internet!\n\n"
-        "For the easiest setup, you should pair Moonlight to your PC from your home network before trying to stream over the Internet.\n\n"
+    snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to host over the Internet!\n\n"
+        "For the easiest setup, you should pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
         "If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
     DisplayMessage(msgBuf, nullptr, MpInfo);
 
