@@ -944,11 +944,14 @@ int main(int argc, char* argv[])
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#connected-through-another-router-error");
         }
         else if (IsPossibleCGN(&locallyReportedWanAddr)) {
-            snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
+            snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet.\n\n"
+                "Ask your ISP for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
         }
         else {
-            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed. Click the Help button for guidance on fixing this issue.\n\nThe following ports were not forwarded properly:\n%s", portMsgBuf);
+            snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed.\n\n"
+                "Check that UPnP is enabled in your router settings. For more information and workarounds, click the Help button.\n\n"
+                "The following ports were not forwarded properly:\n%s", portMsgBuf);
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
         }
 
