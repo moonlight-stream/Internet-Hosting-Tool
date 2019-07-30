@@ -64,6 +64,7 @@ VOID CALLBACK MsgBoxHelpCallback(LPHELPINFO lpHelpInfo)
 
 void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessagePriority priority = MpError, bool terminal = true)
 {
+    fprintf(CONSOLE_OUT, "%s\n", message);
     fprintf(LOG_OUT, "%s\n", message);
 
     if (terminal) {
