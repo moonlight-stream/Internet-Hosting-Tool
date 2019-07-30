@@ -931,9 +931,9 @@ int main(int argc, char* argv[])
                     }
                 }
             }
-        }
 
-        freeaddrinfo(result);
+            freeaddrinfo(result);
+        }
 
         // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
         // we probably would not have even gotten past STUN.
