@@ -904,6 +904,7 @@ int main(int argc, char* argv[])
                     if (current->ai_family == AF_INET) {
                         fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
                         if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true)) {
+                            freeaddrinfo(result);
                             goto AllTestsPassed;
                         }
                     }
@@ -919,11 +920,14 @@ int main(int argc, char* argv[])
                                 "If you want to try streaming with this configuration, you must pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
                                 "To get full connectivity, please contact your ISP and ask for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
                             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#limited-connectivity-for-hosting-error", MpWarn);
+                            freeaddrinfo(result);
                             return 0;
                         }
                     }
                 }
             }
+
+            freeaddrinfo(result);
 
             if (IsPossibleCGN(&locallyReportedWanAddr)) {
                 snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet. Click the Help button for guidance on fixing this issue.");
