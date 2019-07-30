@@ -835,14 +835,14 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (!FindLocalInterfaceIPAddress(AF_INET, &ss)) {
+    if (!FindLocalInterfaceIPAddress(AF_INET, &ss) && !FindLocalInterfaceIPAddress(AF_INET6, &ss)) {
         DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
         return -1;
     }
 
     fprintf(CONSOLE_OUT, "Testing GameStream connectivity on your local network...\n");
 
-    // Try to connect via LAN IPv4 address
+    // Try to connect via LAN address
     fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
         snprintf(msgBuf, sizeof(msgBuf),
@@ -851,33 +851,47 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    fprintf(CONSOLE_OUT, "Detecting public IP address...\n");
 
-    bool rulesFound, igdDisconnected;
+    bool igdDisconnected;
     SOCKADDR_IN locallyReportedWanAddr;
-    if (!CheckWANAccess(&sin, &locallyReportedWanAddr, &rulesFound, &igdDisconnected)) {
-        return -1;
+    char wanAddrStr[INET_ADDRSTRLEN];
+
+    if (ss.ss_family == AF_INET) {
+        bool rulesFound;
+
+        fprintf(CONSOLE_OUT, "Detecting public IP address...\n");
+
+        if (!CheckWANAccess(&sin, &locallyReportedWanAddr, &rulesFound, &igdDisconnected)) {
+            return -1;
+        }
+
+        fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
+
+        // Detect a double NAT by detecting STUN and and UPnP mismatches
+        if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
+            fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
+
+            // We don't actually care about the outcome here but it's nice to have in logs
+            // to determine whether solving the double NAT will actually make Moonlight work.
+            TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false);
+
+            fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
+        }
+
+        inet_ntop(AF_INET, &sin.sin_addr, wanAddrStr, sizeof(wanAddrStr));
     }
-
-    fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
-
-    // Detect a double NAT by detecting STUN and and UPnP mismatches
-    if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
-        fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
-
-        // We don't actually care about the outcome here but it's nice to have in logs
-        // to determine whether solving the double NAT will actually make Moonlight work.
-        TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false);
-
-        fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
+    else {
+        // Go directly to the relay check if we have only IPv6 connectivity
+        igdDisconnected = false;
+        locallyReportedWanAddr = {};
+        goto RelayCheck;
     }
-
-    char wanAddrStr[64];
-    inet_ntop(AF_INET, &sin.sin_addr, wanAddrStr, sizeof(wanAddrStr));
 
     // Try to connect via WAN IPv4 address
     fprintf(LOG_OUT, "Testing GameStream ports via STUN-reported WAN address\n");
     if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
+
+    RelayCheck:
         // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
         // we probably would not have even gotten past STUN.
         if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) {
