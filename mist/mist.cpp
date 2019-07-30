@@ -607,6 +607,8 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     natpmp_t natpmp;
     bool foundUpnpIgd = false;
 
+    wanAddr->sin_family = AF_INET;
+    reportedWanAddr->sin_family = AF_INET;
     *foundPortForwardingRules = false;
     *igdDisconnected = false;
 
