@@ -488,35 +488,41 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool co
     return ret;
 }
 
-bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
+bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
 {
     SOCKET s;
-    struct hostent* host;
+    struct addrinfo hint = {};
+    struct addrinfo* result;
+    int err;
 
-    fprintf(LOG_OUT, "Finding local IP address...");
+    fprintf(LOG_OUT, "Finding local %s address...", family == AF_INET ? "IPv4" : "IPv6");
 
-    host = gethostbyname("moonlight-stream.org");
-    if (host == nullptr) {
-        fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
+    hint.ai_family = family;
+    hint.ai_socktype = SOCK_STREAM;
+    hint.ai_protocol = IPPROTO_TCP;
+    hint.ai_flags = AI_ADDRCONFIG;
+    err = getaddrinfo("moonlight-stream.org", "https", &hint, &result);
+    if (err != 0 || result == NULL) {
+        fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
         return false;
     }
 
-    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    s = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     if (s == INVALID_SOCKET) {
         fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
+        freeaddrinfo(result);
         return false;
     }
 
-    SOCKADDR_IN sin = {};
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(443);
-    sin.sin_addr = *(struct in_addr*)host->h_addr;
-    int err = connect(s, (struct sockaddr*)&sin, sizeof(sin));
+    err = connect(s, (struct sockaddr*)result->ai_addr, result->ai_addrlen);
     if (err == SOCKET_ERROR) {
         fprintf(LOG_OUT, "connect() failed: %d\n", WSAGetLastError());
         closesocket(s);
+        freeaddrinfo(result);
         return false;
     }
+
+    freeaddrinfo(result);
 
     // Determine which local interface we bound to
     int nameLen = sizeof(*addr);
@@ -527,8 +533,13 @@ bool FindLocalInterfaceIP4Address(PSOCKADDR_IN addr)
         return false;
     }
 
-    char addrStr[64];
-    inet_ntop(AF_INET, &addr->sin_addr, addrStr, sizeof(addrStr));
+    char addrStr[INET6_ADDRSTRLEN];
+    if (addr->ss_family == AF_INET) {
+        inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+    }
+    else {
+        inet_ntop(AF_INET6, &((struct sockaddr_in6*)addr)->sin6_addr, addrStr, sizeof(addrStr));
+    }
     fprintf(LOG_OUT, "%s\n", addrStr);
 
     return true;
@@ -823,7 +834,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (!FindLocalInterfaceIP4Address(&sin)) {
+    if (!FindLocalInterfaceIPAddress(AF_INET, &ss)) {
         DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
         return -1;
     }
@@ -883,7 +894,7 @@ int main(int argc, char* argv[])
             hint.ai_flags = AI_ADDRCONFIG;
             err = getaddrinfo("loopback.moonlight-stream.org", NULL, &hint, &result);
             if (err != 0 || result == NULL) {
-                fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", WSAGetLastError());
+                fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
             }
             else {
                 // First try the relay server over IPv4. If this passes, it's considered a full success
