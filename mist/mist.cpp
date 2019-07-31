@@ -442,9 +442,13 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
     return PortTestOk;
 }
 
-bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool consolePrint)
+bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool consolePrint, bool* allPortsFailed = nullptr)
 {
     bool ret = true;
+
+    if (allPortsFailed) {
+        *allPortsFailed = true;
+    }
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
         fprintf(LOG_OUT, "Testing %s %d...",
@@ -483,6 +487,9 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool co
                 // Keep going to check all ports and report the failing ones
                 ret = false;
             }
+        }
+        else if (allPortsFailed) {
+            *allPortsFailed = false;
         }
     }
 
@@ -906,12 +913,14 @@ int main(int argc, char* argv[])
             fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
         }
         else {
+            bool allPortsFailedOnV4 = true;
+
             // First try the relay server over IPv4. If this passes, it's considered a full success
             fprintf(LOG_OUT, "Testing GameStream ports via IPv4 loopback server\n");
             for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
                 if (current->ai_family == AF_INET) {
                     fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
-                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true)) {
+                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, &allPortsFailedOnV4)) {
                         freeaddrinfo(result);
                         goto AllTestsPassed;
                     }
@@ -924,12 +933,24 @@ int main(int argc, char* argv[])
                 if (current->ai_family == AF_INET6) {
                     fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
                     if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, NULL, 0, true)) {
-                        snprintf(msgBuf, sizeof(msgBuf), "This PC has limited connectivity for Internet hosting. It will work only for clients on certain networks.\n\n"
-                            "If you want to try streaming with this configuration, you must pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
-                            "To get full connectivity, please contact your ISP and ask for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
-                        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#limited-connectivity-for-hosting-error", MpWarn);
-                        freeaddrinfo(result);
-                        return 0;
+                        // We will terminate the test at the IPv6 limited connectivity warning in the following cases:
+                        // 1) Double-NAT/CGN - indicates the connection is fundamentally limited to IPv6 for end-to-end connectivity
+                        // 2) IPv6-only - indicates the connection is fundamentally limited to IPv6 for all connectivity
+                        // 3) All ports failed the test with our IPv4 relay - This is one final heuristic to weed out IPv4 misconfigurations. If we have some ports open,
+                        //                                                    it clearly indicates IPv4 support is possible, just currently misconfigured.
+                        //
+                        // Our last (implicit) heuristic is that we actually managed to establish an IPv6 connection. This means that there was either
+                        // no IPv6 firewall (hopefully not) or that we were able to talk to a PCP/IGDv6 gateway to allow us through. Hopefully if we have
+                        // a gateway that is unresponsive to UPnP/NAT-PMP, we wouldn't even be able to establish this connection so we would inherently fall
+                        // to the checks below for IPv4 issues.
+                        if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected || IsPossibleCGN(&locallyReportedWanAddr) || ss.ss_family == AF_INET6 || allPortsFailedOnV4) {
+                            snprintf(msgBuf, sizeof(msgBuf), "This PC has limited connectivity for Internet hosting. It will work only for clients on certain networks.\n\n"
+                                "If you want to try streaming with this configuration, you must pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
+                                "To get full connectivity, please contact your ISP and ask for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
+                            DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#limited-connectivity-for-hosting-error", MpWarn);
+                            freeaddrinfo(result);
+                            return 0;
+                        }
                     }
                 }
             }
