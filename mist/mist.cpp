@@ -362,7 +362,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         FD_ZERO(&fds);
         FD_SET(serverSock, &fds);
 
-        timeout.tv_sec = 3;
+        timeout.tv_sec = 2;
         err = select(0, &fds, nullptr, nullptr, &timeout);
         if (err == 1) {
             // Our FD was signalled for data available
