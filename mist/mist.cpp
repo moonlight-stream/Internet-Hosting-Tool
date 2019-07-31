@@ -166,7 +166,7 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
 
     if (priority != MpInfo && terminal) {
         UINT flags = MB_YESNO | MB_TOPMOST | MB_SETFOREGROUND | MB_ICONINFORMATION;
-        switch (MessageBoxA(nullptr, "Would you like to view the troubleshooting log?",
+        switch (MessageBoxA(nullptr, "Would you like to view the troubleshooting log?\n\nYou will need to provide this log if you ask for help on the Moonlight Discord server.",
             "Moonlight Internet Streaming Tester", flags))
         {
         case IDYES:
