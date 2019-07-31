@@ -216,7 +216,7 @@ enum PortTestStatus {
     PortTestError,
     PortTestUnknown
 };
-PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer)
+PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer, bool isLoopbackRelay)
 {
     SOCKET clientSock = INVALID_SOCKET, serverSock = INVALID_SOCKET;
     int err;
@@ -244,8 +244,9 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         if (err == SOCKET_ERROR) {
             if (WSAGetLastError() == WSAEADDRINUSE) {
                 // If someone is already listening (perhaps GFE is currently streaming),
-                // we can proceed if it's a TCP connection.
-                if (proto == IPPROTO_TCP) {
+                // we can proceed if it's a TCP connection unless it's a loopback relay
+                // which would give us a false positive result.
+                if (proto == IPPROTO_TCP && !isLoopbackRelay) {
                     closesocket(serverSock);
                     serverSock = INVALID_SOCKET;
                 }
@@ -442,7 +443,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
     return PortTestOk;
 }
 
-bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool consolePrint, bool* allPortsFailed = nullptr)
+bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool isLoopbackRelay, bool consolePrint, bool* allPortsFailed = nullptr)
 {
     bool ret = true;
 
@@ -461,7 +462,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool co
                 k_Ports[i].port);
         }
 
-        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer);
+        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer, isLoopbackRelay);
 
         if (status != PortTestError && !k_Ports[i].withServer) {
             // Test using a real HTTP client if the port wasn't totally dead.
@@ -837,7 +838,7 @@ int main(int argc, char* argv[])
     sin.sin_family = AF_INET;
     sin.sin_addr = in4addr_loopback;
     fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -853,7 +854,7 @@ int main(int argc, char* argv[])
 
     // Try to connect via LAN address
     fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -882,7 +883,7 @@ int main(int argc, char* argv[])
 
             // We don't actually care about the outcome here but it's nice to have in logs
             // to determine whether solving the double NAT will actually make Moonlight work.
-            TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false);
+            TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false, false);
 
             fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
         }
@@ -898,7 +899,7 @@ int main(int argc, char* argv[])
 
     // Try to connect via WAN IPv4 address
     fprintf(LOG_OUT, "Testing GameStream ports via STUN-reported WAN address\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), true)) {
+    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
     RelayCheck:
         struct addrinfo hint = {};
         struct addrinfo* result;
@@ -920,7 +921,7 @@ int main(int argc, char* argv[])
             for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
                 if (current->ai_family == AF_INET) {
                     fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
-                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, &allPortsFailedOnV4)) {
+                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, true, &allPortsFailedOnV4)) {
                         freeaddrinfo(result);
                         goto AllTestsPassed;
                     }
@@ -932,7 +933,7 @@ int main(int argc, char* argv[])
             for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
                 if (current->ai_family == AF_INET6) {
                     fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
-                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, NULL, 0, true)) {
+                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, NULL, 0, true, true)) {
                         // We will terminate the test at the IPv6 limited connectivity warning in the following cases:
                         // 1) Double-NAT/CGN - indicates the connection is fundamentally limited to IPv6 for end-to-end connectivity
                         // 2) IPv6-only - indicates the connection is fundamentally limited to IPv6 for all connectivity
