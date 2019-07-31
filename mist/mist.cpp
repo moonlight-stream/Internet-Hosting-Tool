@@ -933,7 +933,11 @@ int main(int argc, char* argv[])
             for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
                 if (current->ai_family == AF_INET6) {
                     fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
-                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, NULL, 0, true, true)) {
+                    // Pass the portMsgBuf only if we've detected an IPv6-only setup. Otherwise, we want to preserve
+                    // the failing ports from the IPv4 to display in the error dialog.
+                    if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr,
+                                     ss.ss_family == AF_INET6 ? portMsgBuf : NULL,
+                                     ss.ss_family == AF_INET6 ? sizeof(portMsgBuf) : 0, true, true)) {
                         // We will terminate the test at the IPv6 limited connectivity warning in the following cases:
                         // 1) Double-NAT/CGN - indicates the connection is fundamentally limited to IPv6 for end-to-end connectivity
                         // 2) IPv6-only - indicates the connection is fundamentally limited to IPv6 for all connectivity
