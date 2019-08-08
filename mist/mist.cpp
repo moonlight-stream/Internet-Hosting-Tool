@@ -732,7 +732,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     fprintf(LOG_OUT, "Detecting WAN IP address via STUN...");
     fprintf(CONSOLE_OUT, "\tTesting STUN...\n");
 
-    if (!getExternalAddressPortIP4(IPPROTO_UDP, 0, wanAddr) && !getExternalAddressPortIP4(IPPROTO_TCP, 0, wanAddr)) {
+    if (!getExternalAddressPortIP4(0, wanAddr)) {
         DisplayMessage("Unable to determine your public IP address. Please check your Internet connection or try again in a few minutes.");
         return false;
     }

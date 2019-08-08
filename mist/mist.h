@@ -7,6 +7,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <Windows.h>
+#include <ws2tcpip.h>
 #include <WinSock2.h>
 
 #include "..\version.h"
@@ -14,4 +15,4 @@
 #define CONSOLE_OUT stdout
 #define LOG_OUT stderr
 
-bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN wanAddr);
+bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr);

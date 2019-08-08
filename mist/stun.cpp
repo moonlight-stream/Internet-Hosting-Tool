@@ -38,7 +38,7 @@ typedef struct _STUN_MESSAGE {
 
 #pragma pack(pop)
 
-bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN wanAddr)
+bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
 {
     SOCKET sock;
     STUN_MESSAGE reqMsg;
@@ -46,32 +46,41 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
     int bytesRead;
     int tries;
     int timeout;
+    int err;
     PSTUN_ATTRIBUTE_HEADER attribute;
     PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE ipv4Attrib;
-    struct hostent *host;
+    struct addrinfo* result;
+    struct addrinfo hints;
     union {
         STUN_MESSAGE hdr;
         char buf[1024];
     } resp;
 
-    host = gethostbyname("stun.moonlight-stream.org");
-    if (host == nullptr) {
-        fprintf(LOG_OUT, "gethostbyname() failed: %d\n", WSAGetLastError());
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_flags = AI_ADDRCONFIG;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+    err = getaddrinfo("stun.moonlight-stream.org", "3478", &hints, &result);
+    if (err != 0 || result == NULL) {
+        fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
         return false;
     }
 
-    sock = socket(AF_INET, proto == IPPROTO_TCP ? SOCK_STREAM : SOCK_DGRAM, proto);
+    sock = socket(hints.ai_family, hints.ai_socktype, hints.ai_protocol);
     if (sock == INVALID_SOCKET) {
         fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
+        freeaddrinfo(result);
         return false;
     }
 
     struct sockaddr_in bindAddr = {};
-    bindAddr.sin_family = AF_INET;
+    bindAddr.sin_family = hints.ai_family;
     bindAddr.sin_port = htons(localPort);
     if (bind(sock, (struct sockaddr*)&bindAddr, sizeof(bindAddr)) == SOCKET_ERROR) {
         fprintf(LOG_OUT, "bind() failed: %d\n", WSAGetLastError());
         closesocket(sock);
+        freeaddrinfo(result);
         return false;
     }
 
@@ -82,36 +91,13 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         reqMsg.transactionId[i] = rand();
     }
 
-    SOCKADDR_IN stunAddr = {};
-    stunAddr.sin_family = AF_INET;
-    stunAddr.sin_port = htons(STUN_PORT);
-    stunAddr.sin_addr = *(struct in_addr*)host->h_addr;
-
-    // We'll connect() even for UDP so we can use send()/recv() and share more code
-    if (connect(sock, (struct sockaddr*)&stunAddr, sizeof(stunAddr)) == SOCKET_ERROR) {
-        fprintf(LOG_OUT, "connect() failed: %d\n", WSAGetLastError());
-        closesocket(sock);
-        return false;
-    }
-
-    // For UDP, we'll do 3 iterations of 1 second each. For TCP,
-    // we'll do one iteration with a 3 second wait.
-    if (proto == IPPROTO_TCP) {
-        tries = 1;
-        timeout = STUN_RECV_TIMEOUT_SEC;
-    }
-    else {
-        tries = STUN_RECV_TIMEOUT_SEC;
-        timeout = 1;
-    }
-
     bytesRead = 0;
-    for (i = 0; i < tries; i++) {
-        // Retransmit the request every second until the timeout elapses
-        if (send(sock, (char *)&reqMsg, sizeof(reqMsg), 0) == SOCKET_ERROR) {
-            fprintf(LOG_OUT, "send() failed: %d\n", WSAGetLastError());
-            closesocket(sock);
-            return false;
+    for (i = 0; i < STUN_RECV_TIMEOUT_SEC; i++) {
+        // Retransmit the request every second to all resolved IP addresses until the timeout elapses
+        for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
+            if (sendto(sock, (char*)&reqMsg, sizeof(reqMsg), 0, current->ai_addr, current->ai_addrlen) == SOCKET_ERROR) {
+                fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
+            }
         }
 
         fd_set fds;
@@ -119,7 +105,7 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         FD_SET(sock, &fds);
 
         struct timeval tv;
-        tv.tv_sec = timeout;
+        tv.tv_sec = 1;
         tv.tv_usec = 0;
 
         int selectRes = select(0, &fds, nullptr, nullptr, &tv);
@@ -130,14 +116,16 @@ bool getExternalAddressPortIP4(int proto, unsigned short localPort, PSOCKADDR_IN
         else if (selectRes == SOCKET_ERROR) {
             fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
             closesocket(sock);
+            freeaddrinfo(result);
             return false;
         }
 
         // Error handling is below
-        bytesRead = recv(sock, resp.buf, sizeof(resp.buf), 0);
+        bytesRead = recvfrom(sock, resp.buf, sizeof(resp.buf), 0, NULL, NULL);
         break;
     }
 
+    freeaddrinfo(result);
     closesocket(sock);
 
     if (bytesRead == 0) {
