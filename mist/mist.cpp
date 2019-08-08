@@ -211,6 +211,20 @@ bool IsGameStreamEnabled()
     }
 }
 
+bool IsZeroTierInstalled()
+{
+    DWORD error;
+    HKEY key;
+
+    error = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\ZeroTier, Inc.\\ZeroTier One", 0, KEY_READ | KEY_WOW64_32KEY, &key);
+    if (error != ERROR_SUCCESS) {
+        return false;
+    }
+
+    RegCloseKey(key);
+    return true;
+}
+
 enum PortTestStatus {
     PortTestOk,
     PortTestError,
@@ -554,6 +568,54 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
     return true;
 }
 
+bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
+{
+    union {
+        IP_ADAPTER_ADDRESSES addresses;
+        char buffer[8192];
+    };
+    ULONG error;
+    ULONG length;
+    PIP_ADAPTER_ADDRESSES currentAdapter;
+    PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
+
+    // Get all IPv4 interfaces
+    length = sizeof(buffer);
+    error = GetAdaptersAddresses(AF_INET,
+        GAA_FLAG_SKIP_ANYCAST |
+        GAA_FLAG_SKIP_MULTICAST |
+        GAA_FLAG_SKIP_DNS_SERVER |
+        GAA_FLAG_SKIP_FRIENDLY_NAME,
+        NULL,
+        &addresses,
+        &length);
+    if (error != ERROR_SUCCESS) {
+        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", WSAGetLastError());
+        return false;
+    }
+
+    currentAdapter = &addresses;
+    while (currentAdapter != NULL) {
+        // Look for ones that correspond to a ZeroTier device
+        if (wcsstr(currentAdapter->Description, L"ZeroTier")) {
+            // Check if this interface has the IP address we want
+            currentAddress = currentAdapter->FirstUnicastAddress;
+            while (currentAddress != NULL) {
+                if (currentAddress->Address.lpSockaddr->sa_family == AF_INET) {
+                    RtlCopyMemory(addr, currentAddress->Address.lpSockaddr, currentAddress->Address.iSockaddrLength);
+                    return true;
+                }
+
+                currentAddress = currentAddress->Next;
+            }
+        }
+
+        currentAdapter = currentAdapter->Next;
+    }
+
+    return false;
+}
+
 enum UPnPPortStatus {
     NOT_FOUND,
     OK,
@@ -844,6 +906,49 @@ int main(int argc, char* argv[])
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
+    
+    // We do a special limited test pass for ZeroTier
+    if (IsZeroTierInstalled()) {
+        fprintf(LOG_OUT, "Found ZeroTier installed\n");
+
+        if (!FindZeroTierInterfaceAddress(&ss)) {
+            DisplayMessage("ZeroTier appears to be installed on this PC, but it's not connected to a network.\n\n"
+                "If you are trying to host with ZeroTier, connect to your ZeroTier network and restart this test.\n\n"
+                "If not, click OK and this test will continue assuming you aren't using ZeroTier.",
+                "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide#zerotier", MpInfo, false);
+        }
+        else {
+            char zeroTierAddrStr[INET_ADDRSTRLEN];
+
+            inet_ntop(AF_INET, &sin.sin_addr, zeroTierAddrStr, sizeof(zeroTierAddrStr));
+
+            fprintf(LOG_OUT, "Found ZeroTier connected with address: %s\n", zeroTierAddrStr);
+
+            if (strstr(zeroTierAddrStr, "169.254.")) {
+                DisplayMessage("ZeroTier is active, but this PC has not been authorized to connect to your ZeroTier network.\n\n"
+                    "Make sure you check the Auth checkbox for all network members on the ZeroTier Networks webpage.",
+                    "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide#zerotier");
+                return -1;
+            }
+
+            // Try to connect via ZeroTier address
+            fprintf(CONSOLE_OUT, "Testing GameStream connectivity using ZeroTier...\n");
+            fprintf(LOG_OUT, "Testing GameStream ports via ZeroTier\n");
+            if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
+                snprintf(msgBuf, sizeof(msgBuf),
+                    "ZeroTier connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
+                DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
+                return -1;
+            }
+
+            // If we get here, our testing is complete for ZeroTier
+            snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to host over the Internet with ZeroTier!\n\n"
+                "Don't forget to connect to your ZeroTier network on your client before streaming over the Internet.\n\n"
+                "After connecting ZeroTier, type following address into Moonlight's Add PC dialog: %s", zeroTierAddrStr);
+            DisplayMessage(msgBuf, nullptr, MpInfo);
+            return 0;
+        }
+    }
 
     if (!FindLocalInterfaceIPAddress(AF_INET, &ss) && !FindLocalInterfaceIPAddress(AF_INET6, &ss)) {
         DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
@@ -860,7 +965,6 @@ int main(int argc, char* argv[])
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
-
 
     bool igdDisconnected;
     SOCKADDR_IN locallyReportedWanAddr;

@@ -8,6 +8,7 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <Windows.h>
 #include <ws2tcpip.h>
+#include <Iphlpapi.h>
 #include <WinSock2.h>
 
 #include "..\version.h"
