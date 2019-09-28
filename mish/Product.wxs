@@ -47,9 +47,7 @@
                         Account="NT AUTHORITY\LocalService"
                         ErrorControl="ignore"
                         Interactive="no">
-          <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" ServiceSid="unrestricted">
-            <RequiredPrivilege>SeChangeNotifyPrivilege</RequiredPrivilege>
-          </ServiceConfig>
+          <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" ServiceSid="unrestricted"/>
         </ServiceInstall>
         <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="MISS" Wait="yes" />
       </Component>
