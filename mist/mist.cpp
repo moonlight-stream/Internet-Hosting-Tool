@@ -994,7 +994,7 @@ int main(int argc, char* argv[])
     }
     if (ExecuteCommand("WMIC /Node:localhost /Namespace:\\\\root\\SecurityCenter2 Path FirewallProduct Get displayName", wmicBuf, sizeof(wmicBuf))) {
         fprintf(LOG_OUT, "Firewall products:\n%s", wmicBuf);
-        if (!strstr(wmicBuf, "No Instance(s) Available.")) {
+        if (!strstr(wmicBuf, "No Instance(s) Available.") && !strstr(wmicBuf, "Invalid namespace")) {
             DisplayMessage("Detected anti-virus and/or firewall software installed on this system. This software may interfere with NVIDIA GameStream.\n\n"
                 "Please try temporarily disabling your anti-virus or firewall software if you experience connection issues with Moonlight.",
                 "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpInfo, false);
