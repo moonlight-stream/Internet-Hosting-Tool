@@ -178,6 +178,56 @@ void DisplayMessage(const char* message, const char* helpUrl = nullptr, MessageP
     }
 }
 
+bool ExecuteCommand(PCSTR command, PCHAR outputBuffer, DWORD outputBufferLength)
+{
+    SECURITY_ATTRIBUTES attribs;
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    HANDLE outReadHandle;
+    DWORD bytesRead = 0;
+
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    si.wShowWindow = SW_HIDE;
+
+    ZeroMemory(&attribs, sizeof(attribs));
+    attribs.nLength = sizeof(attribs);
+    attribs.bInheritHandle = TRUE;
+
+    if (!CreatePipe(&outReadHandle, &si.hStdOutput, &attribs, 0))
+    {
+        fprintf(LOG_OUT, "CreatePipe() failed: %d\n", GetLastError());
+        return false;
+    }
+
+    si.hStdError = si.hStdOutput;
+
+    if (!CreateProcess(NULL, (LPSTR)command, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
+    {
+        fprintf(LOG_OUT, "CreateProcess() failed: %d\n", GetLastError());
+        CloseHandle(si.hStdOutput);
+        return false;
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    CloseHandle(si.hStdOutput);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    if (!ReadFile(outReadHandle, outputBuffer, outputBufferLength, &bytesRead, NULL))
+    {
+        fprintf(LOG_OUT, "ReadFile() failed: %d\n", GetLastError());
+        CloseHandle(outReadHandle);
+        return false;
+    }
+
+    outputBuffer[bytesRead] = 0;
+    CloseHandle(outReadHandle);
+    return true;
+}
+
 bool IsGameStreamEnabled()
 {
     DWORD error;
@@ -934,6 +984,21 @@ int main(int argc, char* argv[])
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
         return -1;
+    }
+
+    fprintf(CONSOLE_OUT, "Checking for anti-virus and firewall software...\n");
+
+    char wmicBuf[8192];
+    if (ExecuteCommand("WMIC /Node:localhost /Namespace:\\\\root\\SecurityCenter2 Path AntiVirusProduct Get displayName", wmicBuf, sizeof(wmicBuf))) {
+        fprintf(LOG_OUT, "AV products:\n%s", wmicBuf);
+    }
+    if (ExecuteCommand("WMIC /Node:localhost /Namespace:\\\\root\\SecurityCenter2 Path FirewallProduct Get displayName", wmicBuf, sizeof(wmicBuf))) {
+        fprintf(LOG_OUT, "Firewall products:\n%s", wmicBuf);
+        if (!strstr(wmicBuf, "No Instance(s) Available.")) {
+            DisplayMessage("Detected anti-virus and/or firewall software installed on this system. This software may interfere with NVIDIA GameStream.\n\n"
+                "Please try temporarily disabling your anti-virus or firewall software if you experience connection issues with Moonlight.",
+                "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpInfo, false);
+        }
     }
 
     fprintf(CONSOLE_OUT, "Checking network connections...\n");
