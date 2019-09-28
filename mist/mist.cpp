@@ -590,7 +590,7 @@ bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
         &addresses,
         &length);
     if (error != ERROR_SUCCESS) {
-        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", WSAGetLastError());
+        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
         return false;
     }
 
@@ -614,6 +614,57 @@ bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
     }
 
     return false;
+}
+
+bool FindDuplicateDefaultInterfaces(void)
+{
+    union {
+        IP_ADAPTER_ADDRESSES addresses;
+        char buffer[8192];
+    };
+    ULONG error;
+    ULONG length;
+    MIB_IPFORWARDROW defaultRoute;
+    PIP_ADAPTER_ADDRESSES currentAdapter;
+    DWORD matchingInterfaces = 0;
+
+    error = GetBestRoute(0, 0, &defaultRoute);
+    if (error != NO_ERROR) {
+        fprintf(LOG_OUT, "GetBestRoute() failed: %d\n", error);
+        return false;
+    }
+
+    // Get all IPv4 interfaces
+    length = sizeof(buffer);
+    error = GetAdaptersAddresses(AF_INET,
+        GAA_FLAG_SKIP_UNICAST |
+        GAA_FLAG_SKIP_ANYCAST |
+        GAA_FLAG_SKIP_MULTICAST |
+        GAA_FLAG_SKIP_DNS_SERVER |
+        GAA_FLAG_INCLUDE_GATEWAYS |
+        GAA_FLAG_SKIP_FRIENDLY_NAME,
+        NULL,
+        &addresses,
+        &length);
+    if (error != ERROR_SUCCESS) {
+        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
+        return false;
+    }
+
+    currentAdapter = &addresses;
+    while (currentAdapter != NULL) {
+        if (currentAdapter->OperStatus == IfOperStatusUp &&
+            currentAdapter->FirstGatewayAddress != NULL &&
+            currentAdapter->FirstGatewayAddress->Address.iSockaddrLength == sizeof(SOCKADDR_IN)) {
+            if (((PSOCKADDR_IN)currentAdapter->FirstGatewayAddress->Address.lpSockaddr)->sin_addr.S_un.S_addr == defaultRoute.dwForwardNextHop) {
+                matchingInterfaces++;
+            }
+        }
+
+        currentAdapter = currentAdapter->Next;
+    }
+
+    return matchingInterfaces > 1;
 }
 
 enum UPnPPortStatus {
@@ -883,6 +934,14 @@ int main(int argc, char* argv[])
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
         return -1;
+    }
+
+    fprintf(CONSOLE_OUT, "Checking network connections...\n");
+
+    if (FindDuplicateDefaultInterfaces()) {
+        DisplayMessage("This computer appears to have more than one connection to the same network (like both WiFi and Ethernet, for example).\n\n"
+            "Please disconnect the extra connection(s) to ensure hosting works reliably over the Internet. If you are connected via WiFi and Ethernet, try disabling your WiFi connection.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#multiple-connections-error", MpWarn, false);
     }
 
     union {
