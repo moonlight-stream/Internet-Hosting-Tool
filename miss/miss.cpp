@@ -386,15 +386,6 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
     else if (response.pnu.newportmapping.mappedpublicport != port) {
         printf("CONFLICT" NL);
 
-        // Some buggy routers (Untangle) will change the *internal* port when
-        // adjusting a port mapping request that collides. This is why we also
-        // pass privateport back from the response and not from the port we originally
-        // asked for. Warn in this case.
-        if (response.pnu.newportmapping.privateport != port) {
-            printf("Buggy router changed the internal port when handling NAT-PMP conflict! (%d -> %d)" NL,
-                port, response.pnu.newportmapping.privateport);
-        }
-
         // It couldn't assign us the external port we requested and gave us an alternate external port.
         // We can't use this alternate mapping, so immediately release it.
         printf("Deleting unwanted NAT-PMP mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", response.pnu.newportmapping.mappedpublicport);
