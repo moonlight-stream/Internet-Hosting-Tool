@@ -44,8 +44,6 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
     STUN_MESSAGE reqMsg;
     int i;
     int bytesRead;
-    int tries;
-    int timeout;
     int err;
     PSTUN_ATTRIBUTE_HEADER attribute;
     PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE ipv4Attrib;
