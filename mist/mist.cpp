@@ -1248,7 +1248,7 @@ int main(int argc, char* argv[])
         }
         else {
             snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed.\n\n"
-                "Check that UPnP is enabled in your router settings. For more information and workarounds, click the Help button.\n\n"
+                "First, try restarting your router. If that fails, check that UPnP is enabled in your router settings. For more information and workarounds, click the Help button.\n\n"
                 "The following ports were not forwarded properly:\n%s", portMsgBuf);
             DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
         }
