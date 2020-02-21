@@ -6,12 +6,14 @@
 #include <shellapi.h>
 #include <objbase.h>
 #include <WinInet.h>
+#include <wtsapi32.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "wininet.lib")
+#pragma comment(lib, "wtsapi32.lib")
 
 #define MINIUPNP_STATICLIB
 #include <miniupnpc/miniupnpc.h>
@@ -259,6 +261,41 @@ bool IsGameStreamEnabled()
         fprintf(LOG_OUT, "GeForce Experience installed and GameStream is enabled\n");
         return true;
     }
+}
+
+bool IsConsoleSessionActive()
+{
+    PWTS_SESSION_INFO_1 sessionInfo;
+    DWORD sessionCount;
+    DWORD level;
+    bool ret;
+    DWORD activeSessionId = WTSGetActiveConsoleSessionId();
+
+    if (activeSessionId == 0xFFFFFFFF) {
+        fprintf(LOG_OUT, "No active console session detected\n");
+        return false;
+    }
+
+    level = 1;
+    if (!WTSEnumerateSessionsEx(WTS_CURRENT_SERVER_HANDLE, &level, 0, &sessionInfo, &sessionCount)) {
+        fprintf(LOG_OUT, "WTSEnumerateSessionsEx() failed: %d\n", GetLastError());
+        return false;
+    }
+
+    ret = false;
+    for (int i = 0; i < sessionCount; i++)
+    {
+        if (sessionInfo[i].SessionId == activeSessionId) {
+            if (sessionInfo[i].pUserName != nullptr) {
+                fprintf(LOG_OUT, "Session %d has active user\n", sessionInfo[i].SessionId);
+                ret = true;
+                break;
+            }
+        }
+    }
+
+    WTSFreeMemoryExW(WTSTypeSessionInfoLevel1, sessionInfo, sessionCount);
+    return ret;
 }
 
 bool IsZeroTierInstalled()
@@ -983,6 +1020,13 @@ int main(int argc, char* argv[])
 
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
+        return -1;
+    }
+
+    if (!IsConsoleSessionActive()) {
+        DisplayMessage("The system display is currently locked. You must sign in to your PC again to use GameStream.\n\n"
+            "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream-compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
 
