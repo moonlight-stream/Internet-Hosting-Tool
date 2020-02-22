@@ -322,6 +322,44 @@ bool IsHibernationEnabled()
     return powerPolicy.DozeS4Timeout != 0 || (powerPolicy.IdleTimeout != 0 && powerPolicy.Idle.Action == PowerActionHibernate);
 }
 
+bool IsLocalNetworkAccessBlocked()
+{
+    MIB_IPFORWARDROW route;
+    DWORD error;
+    SOCKADDR_IN sin;
+    SOCKET s;
+    
+    error = GetBestRoute(0, 0, &route);
+    if (error != NO_ERROR) {
+        fprintf(LOG_OUT, "GetBestRoute() failed: %d\n", error);
+        return false;
+    }
+
+    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) {
+        fprintf(LOG_OUT, "socket() failed: %d\n", error);
+        return false;
+    }
+
+    RtlZeroMemory(&sin, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.S_un.S_addr = route.dwForwardNextHop;
+    sin.sin_port = htons(80);
+
+    if (connect(s, (PSOCKADDR)&sin, sizeof(sin)) == 0) {
+        error = NO_ERROR;
+        fprintf(LOG_OUT, "connect(%s, %d) successful\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+    }
+    else {
+        error = WSAGetLastError();
+        fprintf(LOG_OUT, "connect(%s, %d) failed: %d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), error);
+    }
+
+    closesocket(s);
+
+    return error == WSAEACCES;
+}
+
 bool IsZeroTierInstalled()
 {
     DWORD error;
@@ -1058,14 +1096,29 @@ int main(int argc, char* argv[])
 
     if (IsSleepEnabled()) {
         DisplayMessage("This computer has sleep mode enabled. Sleep mode may prevent this PC from being available for streaming.\n\n"
-            "Please ensure sleep is disabled in Power Options so this PC is always ready for streaming.",
+            "Please ensure sleep is disabled in Power Options so this PC is always ready for streaming. Click the Help button for more information.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#sleep-mode-enabled-warning", MpWarn, false);
     }
 
     if (IsHibernationEnabled()) {
         DisplayMessage("This computer has hibernation enabled. Hibernation may prevent this PC from being available for streaming.\n\n"
-            "Please ensure hibernation is disabled in Power Options so this PC is always ready for streaming.",
+            "Please ensure hibernation is disabled in Power Options so this PC is always ready for streaming. Click the Help button for more information.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#hibernation-enabled-warning", MpWarn, false);
+    }
+
+    fprintf(CONSOLE_OUT, "Checking network connections...\n");
+
+    if (IsLocalNetworkAccessBlocked()) {
+        DisplayMessage("Local network access appears to be blocked by another application installed on this PC.\n\n"
+            "If you have firewall or VPN software installed, make sure it is configured to allow applications to access the local network. Click the Help button for guidance on fixing this issue.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#local-network-access-blocked-error");
+        return -1;
+    }
+
+    if (FindDuplicateDefaultInterfaces()) {
+        DisplayMessage("This computer appears to have more than one connection to the same network (like both WiFi and Ethernet, for example).\n\n"
+            "Please disconnect the extra connection(s) to ensure hosting works reliably over the Internet. If you are connected via WiFi and Ethernet, try disabling your WiFi connection.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#multiple-connections-error", MpWarn, false);
     }
 
     fprintf(CONSOLE_OUT, "Checking for anti-virus and firewall software...\n");
@@ -1083,13 +1136,6 @@ int main(int argc, char* argv[])
         }
     }
 
-    fprintf(CONSOLE_OUT, "Checking network connections...\n");
-
-    if (FindDuplicateDefaultInterfaces()) {
-        DisplayMessage("This computer appears to have more than one connection to the same network (like both WiFi and Ethernet, for example).\n\n"
-            "Please disconnect the extra connection(s) to ensure hosting works reliably over the Internet. If you are connected via WiFi and Ethernet, try disabling your WiFi connection.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#multiple-connections-error", MpWarn, false);
-    }
 
     union {
         SOCKADDR_STORAGE ss;
