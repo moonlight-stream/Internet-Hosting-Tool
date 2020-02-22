@@ -1,7 +1,7 @@
 #pragma once
 
-#define VER_VERSION                 4,3,0,0
-#define VER_VERSION_STR             "4.3.0.0"
+#define VER_VERSION                 4,4,0,0
+#define VER_VERSION_STR             "4.4.0.0"
 
 #define VER_COMPANYNAME_STR         "Moonlight Game Streaming Project"
 #define VER_PRODUCTNAME_STR         "Moonlight Internet Hosting Tool"
