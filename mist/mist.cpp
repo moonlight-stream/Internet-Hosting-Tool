@@ -1132,7 +1132,7 @@ int main(int argc, char* argv[])
         if (strstr(wmicBuf, "displayName")) {
             DisplayMessage("Detected anti-virus and/or firewall software installed on this system. This software may interfere with NVIDIA GameStream.\n\n"
                 "Please try temporarily disabling your anti-virus or firewall software if you experience connection issues with Moonlight.",
-                "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpInfo, false);
+                "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting#known-application-compatibility-issues", MpInfo, false);
         }
     }
 
