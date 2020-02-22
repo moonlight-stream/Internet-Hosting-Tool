@@ -1050,7 +1050,7 @@ int main(int argc, char* argv[])
     if (!IsConsoleSessionActive()) {
         DisplayMessage("The system display is currently locked. You must sign in to your PC again to use GameStream.\n\n"
             "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream-compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#display-locked-error");
         return -1;
     }
 
@@ -1059,13 +1059,13 @@ int main(int argc, char* argv[])
     if (IsSleepEnabled()) {
         DisplayMessage("This computer has sleep mode enabled. Sleep mode may prevent this PC from being available for streaming.\n\n"
             "Please ensure sleep is disabled in Power Options so this PC is always ready for streaming.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpWarn, false);
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#sleep-mode-enabled-warning", MpWarn, false);
     }
 
     if (IsHibernationEnabled()) {
         DisplayMessage("This computer has hibernation enabled. Hibernation may prevent this PC from being available for streaming.\n\n"
             "Please ensure hibernation is disabled in Power Options so this PC is always ready for streaming.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpWarn, false);
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#hibernation-enabled-warning", MpWarn, false);
     }
 
     fprintf(CONSOLE_OUT, "Checking for anti-virus and firewall software...\n");
