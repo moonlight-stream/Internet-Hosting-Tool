@@ -7,6 +7,7 @@
 #include <objbase.h>
 #include <WinInet.h>
 #include <wtsapi32.h>
+#include <powerbase.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -14,6 +15,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "wtsapi32.lib")
+#pragma comment(lib, "powrprof.lib")
 
 #define MINIUPNP_STATICLIB
 #include <miniupnpc/miniupnpc.h>
@@ -296,6 +298,28 @@ bool IsConsoleSessionActive()
 
     WTSFreeMemoryExW(WTSTypeSessionInfoLevel1, sessionInfo, sessionCount);
     return ret;
+}
+
+bool IsSleepEnabled()
+{
+    SYSTEM_POWER_POLICY powerPolicy;
+
+    if (CallNtPowerInformation(SystemPowerPolicyAc, NULL, 0, &powerPolicy, sizeof(powerPolicy)) < 0) {
+        return false;
+    }
+
+    return powerPolicy.IdleTimeout != 0 && powerPolicy.Idle.Action == PowerActionSleep;
+}
+
+bool IsHibernationEnabled()
+{
+    SYSTEM_POWER_POLICY powerPolicy;
+
+    if (CallNtPowerInformation(SystemPowerPolicyAc, NULL, 0, &powerPolicy, sizeof(powerPolicy)) < 0) {
+        return false;
+    }
+
+    return powerPolicy.DozeS4Timeout != 0 || (powerPolicy.IdleTimeout != 0 && powerPolicy.Idle.Action == PowerActionHibernate);
 }
 
 bool IsZeroTierInstalled()
@@ -1028,6 +1052,20 @@ int main(int argc, char* argv[])
             "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream-compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
+    }
+
+    fprintf(CONSOLE_OUT, "Checking power settings...\n");
+
+    if (IsSleepEnabled()) {
+        DisplayMessage("This computer has sleep mode enabled. Sleep mode may prevent this PC from being available for streaming.\n\n"
+            "Please ensure sleep is disabled in Power Options so this PC is always ready for streaming.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpWarn, false);
+    }
+
+    if (IsHibernationEnabled()) {
+        DisplayMessage("This computer has hibernation enabled. Hibernation may prevent this PC from being available for streaming.\n\n"
+            "Please ensure hibernation is disabled in Power Options so this PC is always ready for streaming.",
+            "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting", MpWarn, false);
     }
 
     fprintf(CONSOLE_OUT, "Checking for anti-virus and firewall software...\n");
