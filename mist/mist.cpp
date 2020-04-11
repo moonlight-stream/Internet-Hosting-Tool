@@ -673,7 +673,7 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
     hint.ai_socktype = SOCK_STREAM;
     hint.ai_protocol = IPPROTO_TCP;
     hint.ai_flags = AI_ADDRCONFIG;
-    err = getaddrinfo("moonlight-stream.org", "https", &hint, &result);
+    err = getaddrinfo("moonlight-stream.org", "443", &hint, &result);
     if (err != 0 || result == NULL) {
         fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
         return false;
