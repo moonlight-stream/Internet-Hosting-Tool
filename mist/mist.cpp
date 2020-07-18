@@ -608,6 +608,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
         goto Exit;
     }
     else {
+        fprintf(LOG_OUT, "Success\n");
         result = PortTestOk;
     }
 
