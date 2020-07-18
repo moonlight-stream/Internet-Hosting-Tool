@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <shellapi.h>
 #include <objbase.h>
-#include <WinInet.h>
+#include <WinHttp.h>
 #include <wtsapi32.h>
 #include <powerbase.h>
 
@@ -13,7 +13,7 @@
 #pragma comment(lib, "libnatpmp.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
-#pragma comment(lib, "wininet.lib")
+#pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "wtsapi32.lib")
 #pragma comment(lib, "powrprof.lib")
 
@@ -548,62 +548,81 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
 
 PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
 {
-    HINTERNET hInternet;
-    HINTERNET hRequest;
-    char url[1024];
+    HINTERNET hSession = nullptr;
+    HINTERNET hConnection = nullptr;
+    HINTERNET hRequest = nullptr;
+    PortTestStatus result;
 
-    hInternet = InternetOpenA("MIST", 0, nullptr, nullptr, 0);
-    if (hInternet == nullptr) {
-        fprintf(LOG_OUT, "InternetOpen() failed: %d\n", GetLastError());
-        return PortTestError;
+    hSession = WinHttpOpen(L"MIST", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (hSession == nullptr) {
+        fprintf(LOG_OUT, "WinHttpOpen() failed: %d\n", GetLastError());
+        result = PortTestError;
+        goto Exit;
     }
 
-    char addrStr[INET6_ADDRSTRLEN + 2];
+    WCHAR urlEscapedAddr[INET6_ADDRSTRLEN + 2];
     if (addr->ss_family == AF_INET) {
-        inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
+        InetNtopW(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, urlEscapedAddr, ARRAYSIZE(urlEscapedAddr));
     }
     else {
         // The address string must be escaped for usage in URLs
-        addrStr[0] = '[';
-        inet_ntop(AF_INET6, &((struct sockaddr_in6*)addr)->sin6_addr, &addrStr[1], INET6_ADDRSTRLEN);
-        strcat_s(addrStr, "]");
+        urlEscapedAddr[0] = L'[';
+        InetNtopW(AF_INET6, &((struct sockaddr_in6*)addr)->sin6_addr, &urlEscapedAddr[1], INET6_ADDRSTRLEN);
+        wcscat_s(urlEscapedAddr, L"]");
     }
 
-    sprintf(url, "%s://%s:%d/",
-        port == 47989 ? "http" : "https",
-        addrStr,
-        port);
+    hConnection = WinHttpConnect(hSession, urlEscapedAddr, port, NULL);
+    if (hConnection == nullptr) {
+        fprintf(LOG_OUT, "WinHttpConnect() failed: %d\n", GetLastError());
+        result = PortTestError;
+        goto Exit;
+    }
 
-    hRequest = InternetOpenUrlA(hInternet, url, nullptr, 0,
-        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID | INTERNET_FLAG_NO_UI | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_RELOAD,
-        NULL);
-    if (hRequest == nullptr) {
-        if (GetLastError() == ERROR_INTERNET_CLIENT_AUTH_CERT_NEEDED) {
+    hRequest = WinHttpOpenRequest(hConnection, L"GET", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                  port == 47984 ? WINHTTP_FLAG_SECURE : 0);
+    if (hConnection == nullptr) {
+        fprintf(LOG_OUT, "WinHttpOpenRequest() failed: %d\n", GetLastError());
+        WinHttpCloseHandle(hConnection);
+        result = PortTestError;
+        goto Exit;
+    }
+
+    if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) || !WinHttpReceiveResponse(hRequest, NULL)) {
+        if (GetLastError() == ERROR_WINHTTP_CLIENT_AUTH_CERT_NEEDED) {
             // This is expected for our HTTPS connection
             fprintf(LOG_OUT, "Success\n");
+            result = PortTestOk;
         }
         else {
             // CANNOT_CONNECT is the "expected" error
-            if (GetLastError() == ERROR_INTERNET_CANNOT_CONNECT) {
+            if (GetLastError() == ERROR_WINHTTP_CANNOT_CONNECT) {
                 fprintf(LOG_OUT, "Failed\n");
             }
             else {
                 fprintf(LOG_OUT, "Failed: %d\n", GetLastError());
             }
 
-            InternetCloseHandle(hInternet);
-            return PortTestError;
+            result = PortTestError;
         }
+
+        goto Exit;
     }
     else {
-        fprintf(LOG_OUT, "Success\n");
-        InternetCloseHandle(hRequest);
+        result = PortTestOk;
     }
 
+Exit:
+    if (hRequest != nullptr) {
+        WinHttpCloseHandle(hRequest);
+    }
+    if (hConnection != nullptr) {
+        WinHttpCloseHandle(hConnection);
+    }
+    if (hSession != nullptr) {
+        WinHttpCloseHandle(hSession);
+    }
 
-    InternetCloseHandle(hInternet);
-
-    return PortTestOk;
+    return result;
 }
 
 bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool isLoopbackRelay, bool consolePrint, bool* allPortsFailed = nullptr)
