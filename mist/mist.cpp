@@ -8,6 +8,7 @@
 #include <WinHttp.h>
 #include <wtsapi32.h>
 #include <powerbase.h>
+#include <VersionHelpers.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -558,6 +559,18 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
         fprintf(LOG_OUT, "WinHttpOpen() failed: %d\n", GetLastError());
         result = PortTestError;
         goto Exit;
+    }
+
+    // Windows 8.1 enabled TLSv1.2 for WinHTTP by default (8.0 enables it for Schannel but not WinHTTP)
+    // https://docs.microsoft.com/en-us/security/engineering/solving-tls1-problem
+    if (!IsWindows8Point1OrGreater()) {
+        DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1 |
+                          WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
+                          WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
+
+        if (!WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols))) {
+            fprintf(LOG_OUT, "WinHttpSetOption(WINHTTP_OPTION_SECURE_PROTOCOLS) failed: %d\n", GetLastError());
+        }
     }
 
     WCHAR urlEscapedAddr[INET6_ADDRSTRLEN + 2];
