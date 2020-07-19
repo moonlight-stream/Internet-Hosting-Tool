@@ -26,6 +26,8 @@
 #define NATPMP_STATICLIB
 #include <natpmp.h>
 
+#define LOOPBACK_SERVER_PORT_OFFSET -10000
+
 static struct port_entry {
     int proto;
     int port;
@@ -457,7 +459,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         sizeof(SOCKADDR_IN) : sizeof(SOCKADDR_IN6);
 
     RtlCopyMemory(&sin6, addr, addrLen);
-    sin6.sin6_port = htons(port);
+    sin6.sin6_port = htons(port + (isLoopbackRelay ? LOOPBACK_SERVER_PORT_OFFSET : 0));
 
     if (proto == IPPROTO_TCP) {
         err = connect(clientSock, (struct sockaddr*)&sin6, addrLen);
@@ -547,7 +549,7 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
     }
 }
 
-PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
+PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port, bool isLoopbackRelay)
 {
     HINTERNET hSession = nullptr;
     HINTERNET hConnection = nullptr;
@@ -584,7 +586,7 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port)
         wcscat_s(urlEscapedAddr, L"]");
     }
 
-    hConnection = WinHttpConnect(hSession, urlEscapedAddr, port, NULL);
+    hConnection = WinHttpConnect(hSession, urlEscapedAddr, port + (isLoopbackRelay ? LOOPBACK_SERVER_PORT_OFFSET : 0), NULL);
     if (hConnection == nullptr) {
         fprintf(LOG_OUT, "WinHttpConnect() failed: %d\n", GetLastError());
         result = PortTestError;
@@ -666,7 +668,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
             // TestHttpPort() can take significantly longer to timeout than TestPort(),
             // so we only do this test if we believe we're likely to get a response.
             fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
-            status = TestHttpPort(addr, k_Ports[i].port);
+            status = TestHttpPort(addr, k_Ports[i].port, isLoopbackRelay);
         }
 
         if (status != PortTestOk) {
@@ -1290,7 +1292,7 @@ int main(int argc, char* argv[])
 
     hint.ai_family = AF_UNSPEC;
     hint.ai_flags = AI_ADDRCONFIG;
-    err = getaddrinfo("loopback.moonlight-stream.org", NULL, &hint, &result);
+    err = getaddrinfo("loopback-v2.moonlight-stream.org", NULL, &hint, &result);
     if (err != 0 || result == NULL) {
         fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
     }
