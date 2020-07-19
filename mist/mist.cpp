@@ -597,7 +597,6 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port, bool isLoopbackRel
                                   port == 47984 ? WINHTTP_FLAG_SECURE : 0);
     if (hConnection == nullptr) {
         fprintf(LOG_OUT, "WinHttpOpenRequest() failed: %d\n", GetLastError());
-        WinHttpCloseHandle(hConnection);
         result = PortTestError;
         goto Exit;
     }
