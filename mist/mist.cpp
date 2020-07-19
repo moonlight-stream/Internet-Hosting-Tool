@@ -1266,8 +1266,6 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet...\n");
-
         // Detect a double NAT by detecting STUN and and UPnP mismatches
         if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
             fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
