@@ -563,6 +563,11 @@ PortTestStatus TestHttpPort(PSOCKADDR_STORAGE addr, int port, bool isLoopbackRel
         goto Exit;
     }
 
+    // WinHTTP's default timeouts are very long. Set them to something more reasonable.
+    if (!WinHttpSetTimeouts(hSession, 0, 3000, 5000, 5000)) {
+        fprintf(LOG_OUT, "WinHttpSetTimeouts() failed: %d\n", GetLastError());
+    }
+
     // Windows 8.1 enabled TLSv1.2 for WinHTTP by default (8.0 enables it for Schannel but not WinHTTP)
     // https://docs.microsoft.com/en-us/security/engineering/solving-tls1-problem
     if (!IsWindows8Point1OrGreater()) {
@@ -649,9 +654,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
     }
 
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-        fprintf(LOG_OUT, "Testing %s %d...",
-            k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
-            k_Ports[i].port);
+        PortTestStatus status;
 
         if (consolePrint) {
             fprintf(CONSOLE_OUT, "\tTesting %s %d...\n",
@@ -659,15 +662,18 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
                 k_Ports[i].port);
         }
 
-        PortTestStatus status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer, isLoopbackRelay);
-
-        if (status != PortTestError && !k_Ports[i].withServer) {
+        if (!k_Ports[i].withServer) {
             // Test using a real HTTP client if the port wasn't totally dead.
             // This is required to confirm functionality with the loopback relay.
-            // TestHttpPort() can take significantly longer to timeout than TestPort(),
-            // so we only do this test if we believe we're likely to get a response.
+            assert(k_Ports[i].proto == IPPROTO_TCP);
             fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
             status = TestHttpPort(addr, k_Ports[i].port, isLoopbackRelay);
+        }
+        else {
+            fprintf(LOG_OUT, "Testing %s %d...",
+                k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
+                k_Ports[i].port);
+            status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer, isLoopbackRelay);
         }
 
         if (status != PortTestOk) {
