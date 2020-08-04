@@ -1047,16 +1047,12 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
     return true;
 }
 
-bool IsPossibleCGN(PSOCKADDR_IN wanAddr)
+bool IsCGN(PSOCKADDR_IN wanAddr)
 {
     DWORD addr = htonl(wanAddr->sin_addr.S_un.S_addr);
 
-    // 10.0.0.0/8 - ISPs used to use this
-    if ((addr & 0xFF000000) == 0x0A000000) {
-        return true;
-    }
     // 100.64.0.0/10 - RFC6598 official CGN address
-    else if ((addr & 0xFFC00000) == 0x64400000) {
+    if ((addr & 0xFFC00000) == 0x64400000) {
         return true;
     }
 
@@ -1332,10 +1328,10 @@ int main(int argc, char* argv[])
                     // no IPv6 firewall (hopefully not) or that we were able to talk to a PCP/IGDv6 gateway to allow us through. Hopefully if we have
                     // a gateway that is unresponsive to UPnP/NAT-PMP, we wouldn't even be able to establish this connection so we would inherently fall
                     // to the checks below for IPv4 issues.
-                    if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected || IsPossibleCGN(&locallyReportedWanAddr) || ss.ss_family == AF_INET6 || allPortsFailedOnV4) {
+                    if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected || IsCGN(&locallyReportedWanAddr) || ss.ss_family == AF_INET6 || allPortsFailedOnV4) {
                         snprintf(msgBuf, sizeof(msgBuf), "This PC has limited connectivity for Internet hosting. It will work only for clients on certain networks.\n\n"
                             "If you want to try streaming with this configuration, you must pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
-                            "To get full connectivity, please contact your ISP and ask for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
+                            "To get full connectivity, please contact your ISP and ask for a \"public IPv4 address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
                         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#limited-connectivity-for-hosting-error", MpWarn);
                         freeaddrinfo(result);
                         return 0;
@@ -1349,14 +1345,19 @@ int main(int argc, char* argv[])
 
     // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
     // we probably would not have even gotten past STUN.
-    if (IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) {
+    //
+    // We try to tell double-NAT from CGN by checking if IPv6 connectivity is available. If it
+    // is, we assume we're in a DS-Lite or similar configuration. If not, we'll assume it's a
+    // real double-NAT setup.
+    bool hasV6Connectivity = FindLocalInterfaceIPAddress(AF_INET6, &ss);
+    if (IsCGN(&locallyReportedWanAddr) || ((IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) && hasV6Connectivity)) {
+        snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet.\n\n"
+            "Ask your ISP for a \"public IPv4 address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
+        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
+    }
+    else if ((IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) /* && !hasV6Connectivity */) {
         snprintf(msgBuf, sizeof(msgBuf), "Your router appears be connected to the Internet through another router. Click the Help button for guidance on fixing this issue.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#connected-through-another-router-error");
-    }
-    else if (IsPossibleCGN(&locallyReportedWanAddr)) {
-        snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet.\n\n"
-            "Ask your ISP for a \"public IP address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
-        DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#carrier-grade-nat-error");
     }
     else {
         snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed.\n\n"
