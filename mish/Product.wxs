@@ -14,6 +14,28 @@
     </Feature>
   </Product>
 
+  <!-- Enable the Windows Firewall service if it is disabled. Disabling the Windows Firewall service
+       will paradoxically block *all* incoming network traffic and prevent GameStream, MIST, MISS,
+       and other local servers from working at all. The proper way to disable Windows Firewall is via
+       the Windows Firewall control panel applet. -->
+  <Fragment>
+    <Property Id="MPSSVC_START">
+      <RegistrySearch Id="MpsSvcStart"
+                      Root="HKLM"
+                      Key="System\CurrentControlSet\Services\MpsSvc"
+                      Name="Start"
+                      Type="raw" />
+    </Property>
+
+    <SetProperty Id="EnableMpsSvc" Value='"[SystemFolder]sc.exe" config MpsSvc start= auto' Sequence="execute" Before="InstallInitialize"/>
+    <CustomAction Id="EnableMpsSvc" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <SetProperty Id="StartMpsSvc" Value='"[SystemFolder]net.exe" start MpsSvc' Sequence="execute" Before="InstallInitialize"/>
+    <CustomAction Id="StartMpsSvc" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="deferred" Return="ignore" Impersonate="no"/>
+  </Fragment>
+  
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
@@ -69,5 +91,14 @@
         <RegistryValue Root="HKCU" Key="Software\Moonlight Internet Streaming Tester" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
+
+    <InstallExecuteSequence>
+      <Custom Action="EnableMpsSvc" Before="StartMpsSvc">
+        <![CDATA[MPSSVC_START <> "#2"]]>
+      </Custom>
+      <Custom Action="StartMpsSvc" Before="StopServices">
+        <![CDATA[MPSSVC_START <> "#2"]]>
+      </Custom>
+    </InstallExecuteSequence>
   </Fragment>
 </Wix>
