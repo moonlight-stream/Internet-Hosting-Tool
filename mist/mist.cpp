@@ -700,6 +700,81 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
     return ret;
 }
 
+bool IsTestServerReachable(struct addrinfo* addrinfo, unsigned short port)
+{
+    SOCKET s;
+    FD_SET writeFds, exceptFds;
+    int err;
+    struct timeval tv = {};
+    SOCKADDR_STORAGE addr;
+    char testServerStr[INET6_ADDRSTRLEN];
+
+    memcpy(&addr, addrinfo->ai_addr, addrinfo->ai_addrlen);
+    ((PSOCKADDR_IN6)&addr)->sin6_port = htons(port);
+
+    if (addr.ss_family == AF_INET) {
+        inet_ntop(AF_INET, &((struct sockaddr_in*)&addr)->sin_addr, testServerStr, sizeof(testServerStr));
+    }
+    else {
+        inet_ntop(AF_INET6, &((struct sockaddr_in6*)&addr)->sin6_addr, testServerStr, sizeof(testServerStr));
+    }
+
+    fprintf(LOG_OUT, "Testing reachability of relay server %s...", testServerStr);
+
+    s = socket(addrinfo->ai_family, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) {
+        fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
+        return false;
+    }
+
+    ULONG nbIo = 1;
+    err = ioctlsocket(s, FIONBIO, &nbIo);
+    if (err == SOCKET_ERROR) {
+        fprintf(LOG_OUT, "ioctlsocket() failed: %d\n", WSAGetLastError());
+        closesocket(s);
+        return false;
+    }
+
+    err = connect(s, (PSOCKADDR)&addr, addrinfo->ai_addrlen);
+    if (err == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) {
+        fprintf(LOG_OUT, "Unreachable (%d)\n", WSAGetLastError());
+        closesocket(s);
+        return false;
+    }
+
+    FD_ZERO(&writeFds);
+    FD_ZERO(&exceptFds);
+
+    FD_SET(s, &writeFds);
+    FD_SET(s, &exceptFds);
+
+    tv.tv_sec = 3;
+    err = select(0, nullptr, &writeFds, &exceptFds, &tv);
+    if (err == SOCKET_ERROR) {
+        fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
+        closesocket(s);
+        return false;
+    }
+    else if (err == 0) {
+        fprintf(LOG_OUT, "Unreachable (timeout)\n");
+        closesocket(s);
+        return false;
+    }
+    else {
+        int optlen = sizeof(err);
+        getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &optlen);
+        closesocket(s);
+
+        if (err != 0 || FD_ISSET(s, &exceptFds)) {
+            fprintf(LOG_OUT, "Unreachable (%d)\n", err);
+            return false;
+        }
+
+        fprintf(LOG_OUT, "Reachable\n");
+        return true;
+    }
+}
+
 bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
 {
     SOCKET s;
@@ -715,7 +790,14 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
     hint.ai_flags = AI_ADDRCONFIG;
     err = getaddrinfo("moonlight-stream.org", "443", &hint, &result);
     if (err != 0 || result == NULL) {
-        fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
+        // AI_ADDRCONFIG will mask unusable addresses, so we may get nothing
+        // We get WSANO_DATA or WSAHOST_NOT_FOUND depending on whether it's V4 or V6 :(
+        if (err == WSANO_DATA || err == WSAHOST_NOT_FOUND) {
+            fprintf(LOG_OUT, "NONE\n");
+        }
+        else {
+            fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
+        }
         return false;
     }
 
@@ -1012,7 +1094,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
         closenatpmp(&natpmp);
 
         if (natPmpErr == 0) {
-            char addrStr[64];
+            char addrStr[INET_ADDRSTRLEN];
             reportedWanAddr->sin_addr = response.pnu.publicaddress.addr;
             inet_ntop(AF_INET, &response.pnu.publicaddress.addr, addrStr, sizeof(addrStr));
             fprintf(LOG_OUT, "%s\n", addrStr);
@@ -1039,7 +1121,7 @@ bool CheckWANAccess(PSOCKADDR_IN wanAddr, PSOCKADDR_IN reportedWanAddr, bool* fo
         return false;
     }
     else {
-        char addrStr[64];
+        char addrStr[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &wanAddr->sin_addr, addrStr, sizeof(addrStr));
         fprintf(LOG_OUT, "%s\n", addrStr);
 
@@ -1238,9 +1320,24 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (!FindLocalInterfaceIPAddress(AF_INET, &ss) && !FindLocalInterfaceIPAddress(AF_INET6, &ss)) {
-        DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
-        return -1;
+    bool hasV4Connectivity, hasV6Connectivity;
+    {
+        SOCKADDR_STORAGE v4, v6;
+
+        hasV4Connectivity = FindLocalInterfaceIPAddress(AF_INET, &v4);
+        hasV6Connectivity = FindLocalInterfaceIPAddress(AF_INET6, &v6);
+
+        // Prefer v4 connectivity because that's what GFE uses natively
+        if (hasV4Connectivity) {
+            ss = v4;
+        }
+        else if (hasV6Connectivity) {
+            ss = v6;
+        }
+        else {
+            DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
+            return -1;
+        }
     }
 
     fprintf(CONSOLE_OUT, "Testing GameStream connectivity on your local network...\n");
@@ -1256,7 +1353,7 @@ int main(int argc, char* argv[])
 
     bool igdDisconnected;
     SOCKADDR_IN locallyReportedWanAddr;
-    char wanAddrStr[INET_ADDRSTRLEN];
+    char wanAddrStr[INET6_ADDRSTRLEN];
 
     if (ss.ss_family == AF_INET) {
         bool rulesFound;
@@ -1296,6 +1393,7 @@ int main(int argc, char* argv[])
         fprintf(LOG_OUT, "getaddrinfo() failed: %d\n", err);
     }
     else {
+        bool testServerWasReachable = false;
         bool allPortsFailedOnV4 = true;
 
         // First try the relay server over IPv4. If this passes, it's considered a full success
@@ -1303,6 +1401,14 @@ int main(int argc, char* argv[])
         for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
             if (current->ai_family == AF_INET) {
                 fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
+
+                if (!IsTestServerReachable(current, 443)) {
+                    fprintf(CONSOLE_OUT, "Skipping unreachable relay server...\n");
+                    continue;
+                }
+
+                testServerWasReachable = true;
+
                 if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, true, &allPortsFailedOnV4)) {
                     freeaddrinfo(result);
                     snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to host over the Internet!\n\n"
@@ -1310,6 +1416,10 @@ int main(int argc, char* argv[])
                         "If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
                     DisplayMessage(msgBuf, nullptr, MpInfo);
                     return 0;
+                }
+                else {
+                    // Tested against a working server and it failed
+                    break;
                 }
             }
         }
@@ -1319,6 +1429,14 @@ int main(int argc, char* argv[])
         for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
             if (current->ai_family == AF_INET6) {
                 fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
+
+                if (!IsTestServerReachable(current, 443)) {
+                    fprintf(CONSOLE_OUT, "Skipping unreachable IPv6 relay server...\n");
+                    continue;
+                }
+
+                testServerWasReachable = true;
+
                 // Pass the portMsgBuf only if we've detected an IPv6-only setup. Otherwise, we want to preserve
                 // the failing ports from the IPv4 to display in the error dialog.
                 if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr,
@@ -1343,19 +1461,27 @@ int main(int argc, char* argv[])
                         return 0;
                     }
                 }
+                else {
+                    // Tested against a working server and it failed
+                    break;
+                }
             }
         }
 
         freeaddrinfo(result);
-    }
 
+        if (!testServerWasReachable) {
+            snprintf(msgBuf, sizeof(msgBuf), "None of Moonlight's connection testing servers were reachable from your PC. Check your Internet connection and try again later.");
+            DisplayMessage(msgBuf);
+            return 0;
+        }
+    }
     // Many UPnP devices report IGD disconnected when double-NATed. If it was really offline,
     // we probably would not have even gotten past STUN.
     //
     // We try to tell double-NAT from CGN by checking if IPv6 connectivity is available. If it
     // is, we assume we're in a DS-Lite or similar configuration. If not, we'll assume it's a
     // real double-NAT setup.
-    bool hasV6Connectivity = FindLocalInterfaceIPAddress(AF_INET6, &ss);
     if (IsCGN(&locallyReportedWanAddr) || ((IsDoubleNAT(&locallyReportedWanAddr) || igdDisconnected) && hasV6Connectivity)) {
         snprintf(msgBuf, sizeof(msgBuf), "Your ISP is running a Carrier-Grade NAT that is preventing you from hosting services like Moonlight on the Internet.\n\n"
             "Ask your ISP for a \"public IPv4 address\" which they may offer for free upon request. For more information and workarounds, click the Help button.");
