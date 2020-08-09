@@ -55,7 +55,7 @@ static struct port_entry {
 
 static const int k_WolPorts[] = { 9, 47009 };
 
-bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite)
+bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite, bool validationPass)
 {
     char intClient[16];
     char intPort[6];
@@ -95,15 +95,27 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     if (err == 714) {
         // NoSuchEntryInArray
         printf("NOT FOUND" NL);
+
+        if (validationPass) {
+            // On validation, we found a missing entry. Convert this entry to indefinite
+            // to see if it will stick.
+            indefinite = true;
+        }
     }
     else if (err == 606) {
         printf("UNAUTHORIZED" NL);
+
+        // If we're just validating, we're done. We can't know if the entry was
+        // actually applied but we'll return true to avoid false errors if it was.
+        if (validationPass) {
+            return true;
+        }
     }
     else if (err == UPNPCOMMAND_SUCCESS) {
         // Some routers change the description, so we can't check that here
         if (!strcmp(intClient, myAddr)) {
             if (atoi(leaseDuration) == 0) {
-                printf("OK (Permanent)" NL);
+                printf("OK (Static)" NL);
 
                 // If we have an existing permanent mapping, we can just leave it alone.
                 if (enable) {
@@ -112,6 +124,11 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
             }
             else {
                 printf("OK (%s seconds remaining)" NL, leaseDuration);
+            }
+
+            // If we're just validating, we found an entry, so we're done.
+            if (validationPass) {
+                return true;
             }
 
             if (!enable) {
@@ -130,6 +147,11 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         }
         else {
             printf("CONFLICT: %s %s" NL, intClient, desc);
+
+            // If we're just validating, we found an entry, so we're done.
+            if (validationPass) {
+                return true;
+            }
 
             // Some UPnP IGDs won't let unauthenticated clients delete other conflicting port mappings
             // for security reasons, but we will give it a try anyway. If GameStream is not enabled,
@@ -172,11 +194,16 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     err = UPNP_AddPortMapping(
         urls->controlURL, data->first.servicetype, portStr,
         portStr, myAddr, myDesc, protoStr, nullptr, leaseDuration);
-    if (err == 725 && !indefinite) { // OnlyPermanentLeasesSupported
+    if (err != UPNPCOMMAND_SUCCESS && !indefinite) {
+        // This may be a broken IGD that doesn't like non-static mappings. Try a static
+        // mapping before finally giving up.
         err = UPNP_AddPortMapping(
             urls->controlURL, data->first.servicetype, portStr,
             portStr, myAddr, myDesc, protoStr, nullptr, "0");
-        printf("PERMANENT ");
+        printf("STATIC RETRY ");
+    }
+    else if (indefinite) {
+        printf("STATIC ");
     }
     if (err == UPNPCOMMAND_SUCCESS) {
         printf("OK" NL);
@@ -291,8 +318,9 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
         portMappingInternalAddress = localAddress;
     }
 
+    // Create the port mappings
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-        if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false)) {
+        if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false, false)) {
             success = false;
         }
     }
@@ -316,13 +344,28 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
                 char broadcastAddrStr[128];
                 inet_ntop(AF_INET, &broadcastAddr, broadcastAddrStr, sizeof(broadcastAddrStr));
 
-                UPnPMapPort(&urls, &data, IPPROTO_UDP, broadcastAddrStr, k_WolPorts[i], enable, true);
+                UPnPMapPort(&urls, &data, IPPROTO_UDP, broadcastAddrStr, k_WolPorts[i], enable, true, false);
             }
         }
         else {
             // When we're mapping the WOL ports upstream of our router, we map directly to
             // the port on the upstream address (likely our router's WAN interface).
-            UPnPMapPort(&urls, &data, IPPROTO_UDP, lanAddrOverride, k_WolPorts[i], enable, true);
+            UPnPMapPort(&urls, &data, IPPROTO_UDP, lanAddrOverride, k_WolPorts[i], enable, true, false);
+        }
+    }
+
+    // Validate the rules are present and correct if they claimed to be added successfully
+    if (success && enable) {
+        // Wait 10 seconds for the router state to quiesce
+        printf("Waiting before UPnP port validation...");
+        Sleep(10000);
+        printf("done" NL);
+
+        // Perform the validation pass (converting any now missing entries to permanent ones)
+        for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
+            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false, true)) {
+                success = false;
+            }
         }
     }
 
