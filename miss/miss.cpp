@@ -96,6 +96,9 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         // NoSuchEntryInArray
         printf("NOT FOUND" NL);
     }
+    else if (err == 606) {
+        printf("UNAUTHORIZED" NL);
+    }
     else if (err == UPNPCOMMAND_SUCCESS) {
         // Some routers change the description, so we can't check that here
         if (!strcmp(intClient, myAddr)) {
@@ -151,6 +154,10 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     }
     else {
         printf("ERROR %d (%s)" NL, err, strupnperror(err));
+
+        // If we get a strange error from the router, we'll assume it's some old broken IGDv1
+        // device and only use indefinite lease durations to hopefully avoid confusing it.
+        indefinite = true;
     }
 
     // Bail if GameStream is disabled
