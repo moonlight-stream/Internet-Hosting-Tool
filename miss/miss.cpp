@@ -53,7 +53,7 @@ static struct port_entry {
     {IPPROTO_UDP, 48010}
 };
 
-static const int k_WolPorts[] = { 9 };
+static const int k_WolPorts[] = { 9, 47009 };
 
 bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite)
 {
