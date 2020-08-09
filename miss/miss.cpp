@@ -101,6 +101,11 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         if (!strcmp(intClient, myAddr)) {
             if (atoi(leaseDuration) == 0) {
                 printf("OK (Permanent)" NL);
+
+                // If we have an existing permanent mapping, we can just leave it alone.
+                if (enable) {
+                    return true;
+                }
             }
             else {
                 printf("OK (%s seconds remaining)" NL, leaseDuration);
