@@ -19,8 +19,6 @@ WINAPI
 UdpRelayThreadProc(LPVOID Context)
 {
     PUDP_TUPLE tuple = (PUDP_TUPLE)Context;
-    fd_set fds;
-    int err;
     SOCKADDR_IN lastRemoteAddr;
 
     RtlZeroMemory(&lastRemoteAddr, sizeof(lastRemoteAddr));
@@ -29,19 +27,11 @@ UdpRelayThreadProc(LPVOID Context)
         char buffer[4096];
         SOCKADDR_IN sourceAddr;
         int sourceAddrLen;
-
-        FD_ZERO(&fds);
-
-        FD_SET(tuple->socket, &fds);
-
-        err = select(0, &fds, NULL, NULL, NULL);
-        if (err <= 0) {
-            break;
-        }
+        int recvLen;
 
         sourceAddrLen = sizeof(sourceAddr);
-        err = recvfrom(tuple->socket, buffer, sizeof(buffer), 0, (PSOCKADDR)&sourceAddr, &sourceAddrLen);
-        if (err == SOCKET_ERROR) {
+        recvLen = recvfrom(tuple->socket, buffer, sizeof(buffer), 0, (PSOCKADDR)&sourceAddr, &sourceAddrLen);
+        if (recvLen == SOCKET_ERROR) {
             continue;
         }
         
@@ -60,7 +50,7 @@ UdpRelayThreadProc(LPVOID Context)
             destinationAddr.sin_port = htons(tuple->port);
         }
 
-        sendto(tuple->socket, buffer, err, 0, (PSOCKADDR)&destinationAddr, sizeof(destinationAddr));
+        sendto(tuple->socket, buffer, recvLen, 0, (PSOCKADDR)&destinationAddr, sizeof(destinationAddr));
     }
 
     closesocket(tuple->socket);
