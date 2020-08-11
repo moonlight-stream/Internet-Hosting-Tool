@@ -21,6 +21,9 @@ UdpRelayThreadProc(LPVOID Context)
     PUDP_TUPLE tuple = (PUDP_TUPLE)Context;
     SOCKADDR_IN lastRemoteAddr;
 
+    // Ensure the relay threads aren't preempted by games or other CPU intensive activity
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
     RtlZeroMemory(&lastRemoteAddr, sizeof(lastRemoteAddr));
 
     for (;;) {

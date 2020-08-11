@@ -868,6 +868,10 @@ int Run()
 
     ResetLogFile();
 
+    // Bump the process priority class to above normal. The UDP relay threads will
+    // further raise their own thread priorities to avoid preemption by other activity.
+    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
+
     // Create the UDP alternate port relays
     for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
         if (k_Ports[i].proto == IPPROTO_UDP) {
