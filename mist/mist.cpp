@@ -9,6 +9,7 @@
 #include <wtsapi32.h>
 #include <powerbase.h>
 #include <VersionHelpers.h>
+#include <tlhelp32.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -266,6 +267,28 @@ bool IsGameStreamEnabled()
         fprintf(LOG_OUT, "GeForce Experience installed and GameStream is enabled\n");
         return true;
     }
+}
+
+bool IsCurrentlyStreaming()
+{
+    bool ret = false;
+    HANDLE processSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32 procEntry;
+    procEntry.dwSize = sizeof(procEntry);
+    Process32First(processSnapshot, &procEntry);
+
+    do {
+        // If we find nvstreamer.exe running, we're currently streaming
+        if (_stricmp(procEntry.szExeFile, "nvstreamer.exe") == 0) {
+            ret = true;
+            break;
+        }
+    } while (Process32Next(processSnapshot, &procEntry));
+
+    CloseHandle(processSnapshot);
+
+    return ret;
 }
 
 bool IsConsoleSessionActive()
@@ -1200,6 +1223,12 @@ int main(int argc, char* argv[])
 
     // First check if GameStream is enabled
     if (!IsGameStreamEnabled()) {
+        return -1;
+    }
+
+    if (IsCurrentlyStreaming()) {
+        DisplayMessage("The test cannot proceed because a GameStream session is currently running on this PC.\n\n"
+            "Quit the currently running app on this host within Moonlight, or reboot your PC.");
         return -1;
     }
 
