@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include "relay.h"
 #include "..\version.h"
 
 #pragma comment(lib, "miniupnpc.lib")
@@ -204,6 +205,21 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     }
     else if (indefinite) {
         printf("STATIC ");
+    }
+    if (err == 718 && proto == IPPROTO_UDP) { // ConflictInMappingEntry
+        // Some UPnP implementations incorrectly deduplicate on the internal port instead
+        // of the external port, in violation of the UPnP IGD specification. Since GFE creates
+        // mappings on the same internal port as us, those routers break our mappings. To
+        // work around this issue, we run relays for each of the UDP ports on an alternate
+        // internal port. We'll try the alternate port if we get a conflict for a UDP entry.
+        // Given that these are already horribly non-spec compliant, we won't take any chances
+        // and we'll use an indefinite mapping too.
+        char altPortStr[6];
+        snprintf(altPortStr, sizeof(altPortStr), "%d", port + RELAY_PORT_OFFSET);
+        err = UPNP_AddPortMapping(
+            urls->controlURL, data->first.servicetype, portStr,
+            altPortStr, myAddr, myDesc, protoStr, nullptr, "0");
+        printf("ALTERNATE ");
     }
     if (err == UPNPCOMMAND_SUCCESS) {
         printf("OK" NL);
@@ -851,6 +867,13 @@ int Run()
     HANDLE events[2] = { ifaceChangeEvent, gsChangeEvent };
 
     ResetLogFile();
+
+    // Create the UDP alternate port relays
+    for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
+        if (k_Ports[i].proto == IPPROTO_UDP) {
+            StartUdpRelay(k_Ports[i].port);
+        }
+    }
 
     // Create the thread to watch for GameStream state changes
     CreateThread(nullptr, 0, GameStreamStateChangeThread, gsChangeEvent, 0, nullptr);

@@ -24,6 +24,9 @@
     <ClCompile Include="pcp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="relay.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="miss.rc">
@@ -32,6 +35,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="relay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

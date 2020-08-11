@@ -163,6 +163,7 @@
   <ItemGroup>
     <ClCompile Include="miss.cpp" />
     <ClCompile Include="pcp.cpp" />
+    <ClCompile Include="relay.cpp" />
     <ClCompile Include="tracer.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -170,6 +171,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\version.h" />
+    <ClInclude Include="relay.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
