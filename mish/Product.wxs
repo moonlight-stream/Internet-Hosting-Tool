@@ -80,6 +80,43 @@
                                   Name="Moonlight Internet Streaming Tester"/>
         </File>
       </Component>
+      <Component Id="GameStreamFirewallRules" Guid="{16CA2511-B533-46F8-8882-F8AEEFDFD7DF}" KeyPath="yes">
+        <fire:FirewallException Id="HttpFwException"
+                                Scope="any"
+                                Port="47984"
+                                Protocol="tcp"
+                                Name="Moonlight - HTTPS"/>
+        <fire:FirewallException Id="HttpsFwException"
+                                Scope="any"
+                                Port="47989"
+                                Protocol="tcp"
+                                Name="Moonlight - HTTP"/>
+        <fire:FirewallException Id="RtspFwException"
+                                Scope="any"
+                                Port="48010"
+                                Protocol="tcp"
+                                Name="Moonlight - RTSP"/>
+        <fire:FirewallException Id="VideoFwException"
+                                Scope="any"
+                                Port="47998"
+                                Protocol="udp"
+                                Name="Moonlight - Video"/>
+        <fire:FirewallException Id="ControlFwException"
+                                Scope="any"
+                                Port="47999"
+                                Protocol="udp"
+                                Name="Moonlight - Control"/>
+        <fire:FirewallException Id="AudioFwException"
+                                Scope="any"
+                                Port="48000"
+                                Protocol="udp"
+                                Name="Moonlight - Audio"/>
+        <fire:FirewallException Id="RtspuFwException"
+                                Scope="any"
+                                Port="48010"
+                                Protocol="udp"
+                                Name="Moonlight - RTSPU"/>
+      </Component>
       <Component Id="Shortcuts" Guid="*">
         <Shortcut Id="StartMenuShortcut"
                   Name="Moonlight Internet Streaming Tester"
