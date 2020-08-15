@@ -116,7 +116,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         // Some routers change the description, so we can't check that here
         if (!strcmp(intClient, myAddr)) {
             if (atoi(leaseDuration) == 0) {
-                printf("OK (Static)" NL);
+                printf("OK (Static, Internal port: %s)" NL, intPort);
 
                 // If we have an existing permanent mapping, we can just leave it alone.
                 if (enable) {
@@ -124,7 +124,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
                 }
             }
             else {
-                printf("OK (%s seconds remaining)" NL, leaseDuration);
+                printf("OK (%s seconds remaining, Internal port: %s)" NL, leaseDuration, intPort);
             }
 
             // If we're just validating, we found an entry, so we're done.

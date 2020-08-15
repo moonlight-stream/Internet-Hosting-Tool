@@ -1002,7 +1002,7 @@ UPnPPortStatus UPnPCheckPort(struct UPNPUrls* urls, struct IGDdatas* data, int p
     }
     else if (err == UPNPCOMMAND_SUCCESS) {
         if (!strcmp(myAddr, intClient)) {
-            fprintf(LOG_OUT, "OK\n");
+            fprintf(LOG_OUT, "OK (Internal port: %s)\n", intPort);
             return OK;
         }
         else {
