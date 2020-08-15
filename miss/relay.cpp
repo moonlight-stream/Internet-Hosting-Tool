@@ -19,6 +19,7 @@ WINAPI
 UdpRelayThreadProc(LPVOID Context)
 {
     PUDP_TUPLE tuple = (PUDP_TUPLE)Context;
+    USHORT nboPort = htons(tuple->port);
     SOCKADDR_IN lastRemoteAddr;
 
     // Ensure the relay threads aren't preempted by games or other CPU intensive activity
@@ -39,7 +40,7 @@ UdpRelayThreadProc(LPVOID Context)
         }
         
         SOCKADDR_IN destinationAddr;
-        if (RtlEqualMemory(&sourceAddr.sin_addr, &in4addr_loopback, sizeof(sourceAddr.sin_addr))) {
+        if (RtlEqualMemory(&sourceAddr.sin_addr, &in4addr_loopback, sizeof(sourceAddr.sin_addr)) && sourceAddr.sin_port == nboPort) {
             // Traffic incoming from loopback interface - send it to the last remote address
             destinationAddr = lastRemoteAddr;
         }
@@ -50,7 +51,7 @@ UdpRelayThreadProc(LPVOID Context)
             // Send it to the normal port via the loopback adapter
             destinationAddr = sourceAddr;
             destinationAddr.sin_addr = in4addr_loopback;
-            destinationAddr.sin_port = htons(tuple->port);
+            destinationAddr.sin_port = nboPort;
         }
 
         sendto(tuple->socket, buffer, recvLen, 0, (PSOCKADDR)&destinationAddr, sizeof(destinationAddr));
