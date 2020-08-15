@@ -415,7 +415,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
         lifetime = 604800; // 1 week
     }
     else {
-        lifetime = 3600;
+        lifetime = PORT_MAPPING_DURATION_SEC;
     }
 
     printf("Updating NAT-PMP port mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", port);
