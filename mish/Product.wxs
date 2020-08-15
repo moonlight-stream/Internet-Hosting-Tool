@@ -81,12 +81,12 @@
         </File>
       </Component>
       <Component Id="GameStreamFirewallRules" Guid="{16CA2511-B533-46F8-8882-F8AEEFDFD7DF}" KeyPath="yes">
-        <fire:FirewallException Id="HttpFwException"
+        <fire:FirewallException Id="HttpsFwException"
                                 Scope="any"
                                 Port="47984"
                                 Protocol="tcp"
                                 Name="Moonlight - HTTPS"/>
-        <fire:FirewallException Id="HttpsFwException"
+        <fire:FirewallException Id="HttpFwException"
                                 Scope="any"
                                 Port="47989"
                                 Protocol="tcp"
