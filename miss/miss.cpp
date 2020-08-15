@@ -206,7 +206,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
     else if (indefinite) {
         printf("STATIC ");
     }
-    if (err == 718 && proto == IPPROTO_UDP) { // ConflictInMappingEntry
+    if (err == 718 && proto == IPPROTO_UDP && port >= 47000) { // ConflictInMappingEntry
         // Some UPnP implementations incorrectly deduplicate on the internal port instead
         // of the external port, in violation of the UPnP IGD specification. Since GFE creates
         // mappings on the same internal port as us, those routers break our mappings. To
