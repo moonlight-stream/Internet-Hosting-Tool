@@ -805,25 +805,28 @@ void NETIOAPI_API_ IpInterfaceChangeNotificationCallback(PVOID context, PMIB_IPI
     SetEvent((HANDLE)context);
 }
 
-void ResetLogFile()
+void ResetLogFile(bool standaloneExe)
 {
-    char oldLogFilePath[MAX_PATH + 1];
-    char currentLogFilePath[MAX_PATH + 1];
     char timeString[MAX_PATH + 1] = {};
     SYSTEMTIME time;
 
-    ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
-    ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
+    if (!standaloneExe) {
+        char oldLogFilePath[MAX_PATH + 1];
+        char currentLogFilePath[MAX_PATH + 1];
 
-    // Close the existing stdout handle. This is important because otherwise
-    // it may still be open as stdout when we try to MoveFileEx below.
-    fclose(stdout);
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
+        ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
 
-    // Rotate the current to the old log file
-    MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
+        // Close the existing stdout handle. This is important because otherwise
+        // it may still be open as stdout when we try to MoveFileEx below.
+        fclose(stdout);
 
-    // Redirect stdout to this new file
-    freopen(currentLogFilePath, "w", stdout);
+        // Rotate the current to the old log file
+        MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
+
+        // Redirect stdout to this new file
+        freopen(currentLogFilePath, "w", stdout);
+    }
 
     // Print a log header
     printf("Moonlight Internet Streaming Service v" VER_VERSION_STR NL);
@@ -860,13 +863,13 @@ DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
     return err;
 }
 
-int Run()
+int Run(bool standaloneExe)
 {
     HANDLE ifaceChangeEvent = CreateEvent(nullptr, true, false, nullptr);
     HANDLE gsChangeEvent = CreateEvent(nullptr, true, false, nullptr);
     HANDLE events[2] = { ifaceChangeEvent, gsChangeEvent };
 
-    ResetLogFile();
+    ResetLogFile(standaloneExe);
 
     // Bump the process priority class to above normal. The UDP relay threads will
     // further raise their own thread priorities to avoid preemption by other activity.
@@ -899,7 +902,7 @@ int Run()
         ULONGLONG beforeSleepTime = GetTickCount64();
         DWORD ret = WaitForMultipleObjects(ARRAYSIZE(events), events, false, POLLING_DELAY_SEC * 1000);
         if (ret == WAIT_OBJECT_0) {
-            ResetLogFile();
+            ResetLogFile(standaloneExe);
 
             printf("Woke up for interface change notification after %lld seconds" NL,
                 (GetTickCount64() - beforeSleepTime) / 1000);
@@ -908,13 +911,13 @@ int Run()
             Sleep(10000);
         }
         else if (ret == WAIT_OBJECT_0 + 1) {
-            ResetLogFile();
+            ResetLogFile(standaloneExe);
 
             printf("Woke up for GameStream state change notification after %lld seconds" NL,
                 (GetTickCount64() - beforeSleepTime) / 1000);
         }
         else {
-            ResetLogFile();
+            ResetLogFile(standaloneExe);
 
             printf("Woke up for periodic refresh" NL);
         }
@@ -975,7 +978,7 @@ ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
     SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
 
     // Start the service
-    err = Run();
+    err = Run(false);
     if (err != 0) {
         ServiceStatus.dwCurrentState = SERVICE_STOPPED;
         ServiceStatus.dwWin32ExitCode = err;
@@ -998,7 +1001,7 @@ int main(int argc, char* argv[])
     }
 
     if (argc == 2 && !strcmp(argv[1], "exe")) {
-        Run();
+        Run(true);
         return 0;
     }
 
