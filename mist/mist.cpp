@@ -1490,10 +1490,9 @@ int main(int argc, char* argv[])
                         return 0;
                     }
                 }
-                else {
-                    // Tested against a working server and it failed
-                    break;
-                }
+
+                // Tested against a IPv6 working server
+                break;
             }
         }
 
