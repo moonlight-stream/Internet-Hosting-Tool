@@ -45,14 +45,19 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
     int i;
     int bytesRead;
     int err;
+    bool ret;
     PSTUN_ATTRIBUTE_HEADER attribute;
     PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE ipv4Attrib;
     struct addrinfo* result;
     struct addrinfo hints;
+    struct sockaddr_in bindAddr;
     union {
         STUN_MESSAGE hdr;
         char buf[1024];
     } resp;
+
+    sock = INVALID_SOCKET;
+    ret = false;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -68,18 +73,15 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
     sock = socket(hints.ai_family, hints.ai_socktype, hints.ai_protocol);
     if (sock == INVALID_SOCKET) {
         fprintf(LOG_OUT, "socket() failed: %d\n", WSAGetLastError());
-        freeaddrinfo(result);
-        return false;
+        goto Exit;
     }
 
-    struct sockaddr_in bindAddr = {};
+    bindAddr = {};
     bindAddr.sin_family = hints.ai_family;
     bindAddr.sin_port = htons(localPort);
     if (bind(sock, (struct sockaddr*)&bindAddr, sizeof(bindAddr)) == SOCKET_ERROR) {
         fprintf(LOG_OUT, "bind() failed: %d\n", WSAGetLastError());
-        closesocket(sock);
-        freeaddrinfo(result);
-        return false;
+        goto Exit;
     }
 
     reqMsg.messageType = htons(STUN_MESSAGE_BINDING_REQUEST);
@@ -113,9 +115,7 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
         }
         else if (selectRes == SOCKET_ERROR) {
             fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
-            closesocket(sock);
-            freeaddrinfo(result);
-            return false;
+            goto Exit;
         }
 
         // Error handling is below
@@ -123,32 +123,29 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
         break;
     }
 
-    freeaddrinfo(result);
-    closesocket(sock);
-
     if (bytesRead == 0) {
         fprintf(LOG_OUT, "No response from STUN server\n");
-        return false;
+        goto Exit;
     }
     else if (bytesRead == SOCKET_ERROR) {
         fprintf(LOG_OUT, "Failed to read STUN binding response: %d\n", WSAGetLastError());
-        return false;
+        goto Exit;
     }
     else if (bytesRead < sizeof(resp.hdr)) {
         fprintf(LOG_OUT, "STUN message truncated: %d\n", bytesRead);
-        return false;
+        goto Exit;
     }
     else if (htonl(resp.hdr.magicCookie) != STUN_MESSAGE_COOKIE) {
         fprintf(LOG_OUT, "Bad STUN cookie value: %x\n", htonl(resp.hdr.magicCookie));
-        return false;
+        goto Exit;
     }
     else if (memcmp(reqMsg.transactionId, resp.hdr.transactionId, sizeof(reqMsg.transactionId))) {
         fprintf(LOG_OUT, "STUN transaction ID mismatch\n");
-        return false;
+        goto Exit;
     }
     else if (htons(resp.hdr.messageType) != STUN_MESSAGE_BINDING_SUCCESS) {
         fprintf(LOG_OUT, "STUN message type mismatch: %x\n", htons(resp.hdr.messageType));
-        return false;
+        goto Exit;
     }
 
     attribute = (PSTUN_ATTRIBUTE_HEADER)(&resp.hdr + 1);
@@ -156,7 +153,7 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
     while (bytesRead > sizeof(*attribute)) {
         if (bytesRead < sizeof(*attribute) + htons(attribute->length)) {
             fprintf(LOG_OUT, "STUN attribute out of bounds: %d\n", htons(attribute->length));
-            return false;
+            goto Exit;
         }
         // Mask off the comprehension bit
         else if ((htons(attribute->type) & 0x7FFF) != STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS) {
@@ -169,11 +166,11 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
         ipv4Attrib = (PSTUN_MAPPED_IPV4_ADDRESS_ATTRIBUTE)attribute;
         if (htons(ipv4Attrib->hdr.length) != 8) {
             fprintf(LOG_OUT, "STUN address length mismatch: %d\n", htons(ipv4Attrib->hdr.length));
-            return false;
+            goto Exit;
         }
         else if (ipv4Attrib->addressFamily != 1) {
             fprintf(LOG_OUT, "STUN address family mismatch: %x\n", ipv4Attrib->addressFamily);
-            return false;
+            goto Exit;
         }
 
         *wanAddr = {};
@@ -183,9 +180,20 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
         wanAddr->sin_port = ipv4Attrib->port ^ (short)resp.hdr.magicCookie;
         wanAddr->sin_addr.S_un.S_addr = ipv4Attrib->address ^ resp.hdr.magicCookie;
 
-        return true;
+        ret = true;
+        goto Exit;
     }
 
     fprintf(LOG_OUT, "No XOR mapped address found in STUN response!\n");
-    return false;
+
+Exit:
+    if (sock != INVALID_SOCKET) {
+        closesocket(sock);
+    }
+
+    if (result != NULL) {
+        freeaddrinfo(result);
+    }
+
+    return ret;
 }

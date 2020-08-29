@@ -68,11 +68,13 @@ int StartUdpRelay(unsigned short Port)
     SOCKADDR_IN addr;
     HANDLE thread;
     PUDP_TUPLE tuple;
+    int error;
 
     sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
-        printf("socket() failed: %d\n", WSAGetLastError());
-        return WSAGetLastError();
+        error = WSAGetLastError();
+        printf("socket() failed: %d\n", error);
+        return error;
     }
 
     // Bind to the alternate port
@@ -80,9 +82,10 @@ int StartUdpRelay(unsigned short Port)
     addr.sin_family = AF_INET;
     addr.sin_port = htons(Port + RELAY_PORT_OFFSET);
     if (bind(sock, (PSOCKADDR)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        printf("bind() failed: %d\n", WSAGetLastError());
+        error = WSAGetLastError();
+        printf("bind() failed: %d\n", error);
         closesocket(sock);
-        return WSAGetLastError();
+        return error;
     }
 
     tuple = (PUDP_TUPLE)malloc(sizeof(*tuple));
@@ -95,9 +98,10 @@ int StartUdpRelay(unsigned short Port)
 
     thread = CreateThread(NULL, 0, UdpRelayThreadProc, tuple, 0, NULL);
     if (thread == NULL) {
-        printf("CreateThread() failed: %d\n", GetLastError());
+        error = GetLastError();
+        printf("CreateThread() failed: %d\n", error);
         closesocket(sock);
-        return GetLastError();
+        return error;
     }
 
     CloseHandle(thread);
