@@ -70,6 +70,7 @@
                         ErrorControl="ignore"
                         Interactive="no">
           <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" ServiceSid="unrestricted"/>
+          <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" ResetPeriodInDays="1" RestartServiceDelayInSeconds="10"/>
         </ServiceInstall>
         <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="MISS" Wait="yes" />
       </Component>
