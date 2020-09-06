@@ -100,29 +100,37 @@ bool getExternalAddressPortIP4(unsigned short localPort, PSOCKADDR_IN wanAddr)
             }
         }
 
-        fd_set fds;
-        FD_ZERO(&fds);
-        FD_SET(sock, &fds);
+        for (;;) {
+            fd_set fds;
+            FD_ZERO(&fds);
+            FD_SET(sock, &fds);
 
-        struct timeval tv;
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+            struct timeval tv;
+            tv.tv_sec = 1;
+            tv.tv_usec = 0;
 
-        int selectRes = select(0, &fds, nullptr, nullptr, &tv);
-        if (selectRes == 0) {
-            // Timeout - continue looping
-            continue;
+            int selectRes = select(0, &fds, nullptr, nullptr, &tv);
+            if (selectRes == 0) {
+                // Timeout - break to the enclosing loop
+                break;
+            }
+            else if (selectRes == SOCKET_ERROR) {
+                fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
+                goto Exit;
+            }
+
+            // recvfrom() will return WSAECONNRESET if the socket has received an ICMP Port Unreachable
+            // message from one of the IP addresses we've attempted communication with. The socket is still
+            // operable (and may even contain queued messages to receive). We should ignore that error and
+            // continue reading, otherwise exit the loop.
+            bytesRead = recvfrom(sock, resp.buf, sizeof(resp.buf), 0, NULL, NULL);
+            if (bytesRead != SOCKET_ERROR || WSAGetLastError() != WSAECONNRESET) {
+                goto RecvDone;
+            }
         }
-        else if (selectRes == SOCKET_ERROR) {
-            fprintf(LOG_OUT, "select() failed: %d\n", WSAGetLastError());
-            goto Exit;
-        }
-
-        // Error handling is below
-        bytesRead = recvfrom(sock, resp.buf, sizeof(resp.buf), 0, NULL, NULL);
-        break;
     }
 
+RecvDone:
     if (bytesRead == 0) {
         fprintf(LOG_OUT, "No response from STUN server\n");
         goto Exit;
