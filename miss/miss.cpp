@@ -39,6 +39,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
 #define POLLING_DELAY_SEC 120
 #define PORT_MAPPING_DURATION_SEC 3600
 #define UPNP_DISCOVERY_DELAY_MS 5000
+#define GAA_INITIAL_SIZE 8192
 
 static struct port_entry {
     int proto;
@@ -233,10 +234,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
 
 bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
 {
-    union {
-        IP_ADAPTER_ADDRESSES addresses;
-        char buffer[8192];
-    };
+    PIP_ADAPTER_ADDRESSES addresses;
     ULONG error;
     ULONG length;
     PIP_ADAPTER_ADDRESSES currentAdapter;
@@ -245,22 +243,34 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
 
     inet_pton(AF_INET, lanAddressString, &targetAddress);
 
-    // Get a list of all interfaces with IPv4 addresses on the system
-    length = sizeof(buffer);
-    error = GetAdaptersAddresses(AF_INET,
-        GAA_FLAG_SKIP_ANYCAST |
-        GAA_FLAG_SKIP_MULTICAST |
-        GAA_FLAG_SKIP_DNS_SERVER |
-        GAA_FLAG_SKIP_FRIENDLY_NAME,
-        NULL,
-        &addresses,
-        &length);
+    addresses = NULL;
+    length = GAA_INITIAL_SIZE;
+    do {
+        free(addresses);
+        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
+        if (addresses == NULL) {
+            printf("malloc(%u) failed" NL, length);
+            return false;
+        }
+
+        // Get a list of all interfaces with IPv4 addresses on the system
+        error = GetAdaptersAddresses(AF_INET,
+            GAA_FLAG_SKIP_ANYCAST |
+            GAA_FLAG_SKIP_MULTICAST |
+            GAA_FLAG_SKIP_DNS_SERVER |
+            GAA_FLAG_SKIP_FRIENDLY_NAME,
+            NULL,
+            addresses,
+            &length);
+    } while (error == ERROR_BUFFER_OVERFLOW);
+
     if (error != ERROR_SUCCESS) {
         printf("GetAdaptersAddresses() failed: %d" NL, error);
+        free(addresses);
         return false;
     }
 
-    currentAdapter = &addresses;
+    currentAdapter = addresses;
     currentAddress = nullptr;
     while (currentAdapter != nullptr) {
         currentAddress = currentAdapter->FirstUnicastAddress;
@@ -271,6 +281,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
 
             if (RtlEqualMemory(&currentAddrV4->sin_addr, &targetAddress, sizeof(targetAddress))) {
                 *prefixLength = currentAddress->OnLinkPrefixLength;
+                free(addresses);
                 return true;
             }
 
@@ -281,6 +292,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
     }
 
     printf("No adapter found with IPv4 address: %s" NL, lanAddressString);
+    free(addresses);
     return false;
 }
 

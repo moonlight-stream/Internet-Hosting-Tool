@@ -29,6 +29,8 @@
 
 #define LOOPBACK_SERVER_PORT_OFFSET -10000
 
+#define GAA_INITIAL_SIZE 8192
+
 static struct port_entry {
     int proto;
     int port;
@@ -864,31 +866,40 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
 
 bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
 {
-    union {
-        IP_ADAPTER_ADDRESSES addresses;
-        char buffer[8192];
-    };
+    PIP_ADAPTER_ADDRESSES addresses;
     ULONG error;
     ULONG length;
     PIP_ADAPTER_ADDRESSES currentAdapter;
     PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
 
-    // Get all IPv4 interfaces
-    length = sizeof(buffer);
-    error = GetAdaptersAddresses(AF_INET,
-        GAA_FLAG_SKIP_ANYCAST |
-        GAA_FLAG_SKIP_MULTICAST |
-        GAA_FLAG_SKIP_DNS_SERVER |
-        GAA_FLAG_SKIP_FRIENDLY_NAME,
-        NULL,
-        &addresses,
-        &length);
+    addresses = NULL;
+    length = GAA_INITIAL_SIZE;
+    do {
+        free(addresses);
+        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
+        if (addresses == NULL) {
+            fprintf(LOG_OUT, "malloc(%u) failed\n", length);
+            return false;
+        }
+
+        // Get all IPv4 interfaces
+        error = GetAdaptersAddresses(AF_INET,
+            GAA_FLAG_SKIP_ANYCAST |
+            GAA_FLAG_SKIP_MULTICAST |
+            GAA_FLAG_SKIP_DNS_SERVER |
+            GAA_FLAG_SKIP_FRIENDLY_NAME,
+            NULL,
+            addresses,
+            &length);
+    } while (error == ERROR_BUFFER_OVERFLOW);
+
     if (error != ERROR_SUCCESS) {
         fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
+        free(addresses);
         return false;
     }
 
-    currentAdapter = &addresses;
+    currentAdapter = addresses;
     while (currentAdapter != NULL) {
         // Look for ones that correspond to a ZeroTier device
         if (wcsstr(currentAdapter->Description, L"ZeroTier")) {
@@ -897,6 +908,7 @@ bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
             while (currentAddress != NULL) {
                 if (currentAddress->Address.lpSockaddr->sa_family == AF_INET) {
                     RtlCopyMemory(addr, currentAddress->Address.lpSockaddr, currentAddress->Address.iSockaddrLength);
+                    free(addresses);
                     return true;
                 }
 
@@ -907,15 +919,13 @@ bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
         currentAdapter = currentAdapter->Next;
     }
 
+    free(addresses);
     return false;
 }
 
 bool FindDuplicateDefaultInterfaces(void)
 {
-    union {
-        IP_ADAPTER_ADDRESSES addresses;
-        char buffer[8192];
-    };
+    PIP_ADAPTER_ADDRESSES addresses;
     ULONG error;
     ULONG length;
     MIB_IPFORWARDROW defaultRoute;
@@ -928,24 +938,36 @@ bool FindDuplicateDefaultInterfaces(void)
         return false;
     }
 
-    // Get all IPv4 interfaces
-    length = sizeof(buffer);
-    error = GetAdaptersAddresses(AF_INET,
-        GAA_FLAG_SKIP_UNICAST |
-        GAA_FLAG_SKIP_ANYCAST |
-        GAA_FLAG_SKIP_MULTICAST |
-        GAA_FLAG_SKIP_DNS_SERVER |
-        GAA_FLAG_INCLUDE_GATEWAYS |
-        GAA_FLAG_SKIP_FRIENDLY_NAME,
-        NULL,
-        &addresses,
-        &length);
+    addresses = NULL;
+    length = GAA_INITIAL_SIZE;
+    do {
+        free(addresses);
+        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
+        if (addresses == NULL) {
+            fprintf(LOG_OUT, "malloc(%u) failed\n", length);
+            return false;
+        }
+
+        // Get all IPv4 interfaces
+        error = GetAdaptersAddresses(AF_INET,
+            GAA_FLAG_SKIP_UNICAST |
+            GAA_FLAG_SKIP_ANYCAST |
+            GAA_FLAG_SKIP_MULTICAST |
+            GAA_FLAG_SKIP_DNS_SERVER |
+            GAA_FLAG_INCLUDE_GATEWAYS |
+            GAA_FLAG_SKIP_FRIENDLY_NAME,
+            NULL,
+            addresses,
+            &length);
+    } while (error == ERROR_BUFFER_OVERFLOW);
+
     if (error != ERROR_SUCCESS) {
         fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
+        free(addresses);
         return false;
     }
 
-    currentAdapter = &addresses;
+    currentAdapter = addresses;
     while (currentAdapter != NULL) {
         if (currentAdapter->OperStatus == IfOperStatusUp &&
             currentAdapter->FirstGatewayAddress != NULL &&
@@ -958,6 +980,7 @@ bool FindDuplicateDefaultInterfaces(void)
         currentAdapter = currentAdapter->Next;
     }
 
+    free(addresses);
     return matchingInterfaces > 1;
 }
 
