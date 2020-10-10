@@ -533,14 +533,8 @@ bool IsGameStreamEnabled()
         printf("RegQueryValueExA() failed: %d" NL, error);
         return false;
     }
-    else if (!enabled) {
-        printf("GameStream is OFF!" NL);
-        return false;
-    }
-    else {
-        printf("GameStream is ON!" NL);
-        return true;
-    }
+
+    return enabled != 0;
 }
 
 void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* internalAddressIP4, char* upstreamAddressIP4)
@@ -904,7 +898,17 @@ int Run(bool standaloneExe)
     for (;;) {
         ResetEvent(gsChangeEvent);
         ResetEvent(ifaceChangeEvent);
-        UpdatePortMappings(IsGameStreamEnabled());
+
+        bool gameStreamEnabled = IsGameStreamEnabled();
+
+        if (gameStreamEnabled) {
+            printf("GameStream is ON!" NL);
+        }
+        else {
+            printf("GameStream is OFF!" NL);
+        }
+
+        UpdatePortMappings(gameStreamEnabled);
 
         // Refresh when half the duration is expired or if an IP interface
         // change event occurs.
