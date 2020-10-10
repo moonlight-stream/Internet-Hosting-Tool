@@ -118,7 +118,7 @@ bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE
     int bytesRead;
     union {
         PCP_MAP_RESPONSE hdr;
-        char buf[1024];
+        char buf[1100];
     } resp;
     int lifetime;
 
