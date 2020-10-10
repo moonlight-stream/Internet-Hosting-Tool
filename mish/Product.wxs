@@ -117,6 +117,11 @@
                                 Port="48010"
                                 Protocol="udp"
                                 Name="Moonlight - RTSPU"/>
+        <fire:FirewallException Id="MdnsFwException"
+                                Scope="any"
+                                Port="5353"
+                                Protocol="udp"
+                                Name="Moonlight - mDNS"/>
       </Component>
       <Component Id="Shortcuts" Guid="*">
         <Shortcut Id="StartMenuShortcut"
