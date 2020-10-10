@@ -1464,8 +1464,10 @@ int main(int argc, char* argv[])
                 if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, true, &allPortsFailedOnV4)) {
                     freeaddrinfo(result);
                     snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to host over the Internet!\n\n"
-                        "For the easiest setup, you should pair Moonlight to your gaming PC from your home network before trying to stream over the Internet.\n\n"
-                        "If you can't, you can type the following address into Moonlight's Add PC dialog: %s", wanAddrStr);
+                        "Do not uninstall Moonlight Internet Hosting Tool, unless you no longer want to stream over the Internet. It needs to remain installed on your PC to maintain the port forwarding entries on your router.\n\n"
+                        "For the easiest setup, you can simply pair Moonlight to your gaming PC while they are both on the same network and Internet streaming will work automatically.\n\n"
+                        "If your client is not connected the same network as your gaming PC, you can type the following address into Moonlight's Add PC dialog: %s\n\n",
+                        wanAddrStr);
                     DisplayMessage(msgBuf, nullptr, MpInfo);
                     return 0;
                 }
