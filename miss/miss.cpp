@@ -846,26 +846,33 @@ void ResetLogFile(bool standaloneExe)
 DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
 {
     HKEY key;
+    DWORD err;
 
-    // We're watching this key that way we can still detect GameStream turning on
-    // if GFE wasn't even installed when our service started
-    DWORD err = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\NVIDIA Corporation", 0, KEY_READ | KEY_WOW64_64KEY, &key);
-    if (err != ERROR_SUCCESS) {
-        printf("RegOpenKeyExA() failed: %d" NL, err);
-        return err;
-    }
+    do {
+        // We're watching this key that way we can still detect GameStream turning on
+        // if GFE wasn't even installed when our service started
+        do {
+            err = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\NVIDIA Corporation", 0, KEY_READ | KEY_WOW64_64KEY, &key);
+            if (err != ERROR_SUCCESS) {
+                // Wait 10 seconds and try again
+                Sleep(10000);
+            }
+        } while (err != ERROR_SUCCESS);
 
-    // Notify the main thread when the GameStream state changes
-    bool lastGameStreamState = IsGameStreamEnabled();
-    while ((err = RegNotifyChangeKeyValue(key, true, REG_NOTIFY_CHANGE_LAST_SET, nullptr, false)) == ERROR_SUCCESS) {
-        bool currentGameStreamState = IsGameStreamEnabled();
-        if (lastGameStreamState != currentGameStreamState) {
-            SetEvent((HANDLE)Context);
+        // Notify the main thread when the GameStream state changes
+        bool lastGameStreamState = IsGameStreamEnabled();
+        while ((err = RegNotifyChangeKeyValue(key, true, REG_NOTIFY_CHANGE_LAST_SET, nullptr, false)) == ERROR_SUCCESS) {
+            bool currentGameStreamState = IsGameStreamEnabled();
+            if (lastGameStreamState != currentGameStreamState) {
+                SetEvent((HANDLE)Context);
+            }
+            lastGameStreamState = currentGameStreamState;
         }
-        lastGameStreamState = currentGameStreamState;
-    }
 
-    printf("RegNotifyChangeKeyValue() failed: %d" NL, err);
+        // If the key is deleted (by DDU or similar), we will hit this code path and poll until it comes back.
+        RegCloseKey(key);
+    } while (err == ERROR_KEY_DELETED);
+
     return err;
 }
 
