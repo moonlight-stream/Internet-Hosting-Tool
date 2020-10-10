@@ -407,7 +407,7 @@ enum PortTestStatus {
     PortTestError,
     PortTestUnknown
 };
-PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer, bool isLoopbackRelay)
+PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer, bool isLoopbackRelay, bool mtuTest)
 {
     SOCKET clientSock = INVALID_SOCKET, serverSock = INVALID_SOCKET;
     int err;
@@ -532,11 +532,14 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
         return err == 1 ? PortTestOk : PortTestError;
     }
     else {
-        const char testMsg[] = "moonlight-test";
+        // Video packets are up to 1040 bytes.
+        const char testMsg[1040] = "moonlight-test";
 
         // Send several test packets to ensure a random lost packet doesn't make the test fail
         for (int i = 0; i < 5; i++) {
-            err = sendto(clientSock, testMsg, sizeof(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
+            // Send the full payload for MTU tests and the truncated payload for other tests.
+            err = sendto(clientSock, testMsg,
+                mtuTest ? sizeof(testMsg) : strlen(testMsg), 0, (struct sockaddr*)&sin6, addrLen);
             if (err == SOCKET_ERROR) {
                 fprintf(LOG_OUT, "sendto() failed: %d\n", WSAGetLastError());
                 closesocket(clientSock);
@@ -698,7 +701,8 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
             fprintf(LOG_OUT, "Testing %s %d...",
                 k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
                 k_Ports[i].port);
-            status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port, k_Ports[i].withServer, isLoopbackRelay);
+            status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port,
+                k_Ports[i].withServer, isLoopbackRelay, k_Ports[i].port == 47998);
         }
 
         if (status != PortTestOk) {
