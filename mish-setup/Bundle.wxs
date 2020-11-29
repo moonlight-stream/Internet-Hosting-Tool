@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
-     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension">
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 	<Bundle Name="Moonlight Internet Hosting Tool" Manufacturer="Moonlight Game Streaming Project" Version="!(bind.packageVersion.mish)" UpgradeCode="a2ce5056-1114-44b9-b79b-952ef46d3d50">
     <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
       <bal:WixStandardBootstrapperApplication
@@ -12,6 +13,11 @@
 
     <WixVariable Id="WixUILicenseRtf" Value="" />
 
+    <util:ProductSearch Id="VCREDIST_142_x86"
+                        UpgradeCode="65E5BD06-6392-3027-8C26-853107D3CF1A"
+                        Result="version"
+                        Variable="VCREDIST_142_x86" />
+      
     <Chain>
       <ExePackage Name="Microsoft Visual C++ 2015-2019 Redistributable"
                   Cache="no"
@@ -19,6 +25,7 @@
                   Permanent="yes"
                   Vital="yes"
                   InstallCommand="/install /quiet /norestart"
+                  DetectCondition="VCREDIST_142_x86 &gt;= v14.28.29334"
                   DownloadUrl="https://moonlight-stream.org/downloads/vcredist/14.28.29334/vcredist_x86.exe">
         
         <RemotePayload Description="Microsoft Visual C++ 2015-2019 Redistributable"
