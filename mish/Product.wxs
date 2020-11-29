@@ -52,6 +52,12 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MiniupnpcDll">
+        <File Source="$(var.miss.TargetDir)\miniupnpc.dll" KeyPath="yes"/>
+      </Component>
+      <Component Id="LibnatpmpDll">
+        <File Source="$(var.miss.TargetDir)\libnatpmp.dll" KeyPath="yes"/>
+      </Component>
       <Component Id="MISS">
         <File Source="$(var.miss.TargetPath)" KeyPath="yes">
           <fire:FirewallException Id="MISSFwException"
