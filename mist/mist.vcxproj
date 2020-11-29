@@ -93,7 +93,7 @@
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>..\libs\include;..\libs\include\miniupnpc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -103,6 +103,9 @@
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy /Y  "$(SolutionDir)libs\x86\Debug\*" "$(TargetDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -121,6 +124,9 @@
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy /Y  "$(SolutionDir)libs\x86\Debug\*" "$(TargetDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -135,7 +141,7 @@
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>..\libs\include;..\libs\include\miniupnpc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -147,6 +153,9 @@
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy /Y  "$(SolutionDir)libs\x86\Release\*" "$(TargetDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -169,6 +178,9 @@
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy /Y  "$(SolutionDir)libs\x86\Release\*" "$(TargetDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="mist.cpp" />
