@@ -51,6 +51,13 @@ typedef unsigned short uint16_t;
 #endif	/* _WIN32 */
 #include "natpmp_declspec.h"
 
+/* Set to 9 by https://tools.ietf.org/html/rfc6886#section-3.1 which leads to a
+ * maximum timeout of 127.75 seconds, due to the initial 250 ms timeout doubling
+ * each time, so we allow a compile-time modification here.*/
+#ifndef NATPMP_MAX_RETRIES
+#define NATPMP_MAX_RETRIES (9)
+#endif
+
 typedef struct {
 	int s;	/* socket */
 	in_addr_t gateway;	/* default gateway (IPv4) */
