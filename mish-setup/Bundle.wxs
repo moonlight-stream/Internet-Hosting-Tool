@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
+<?define VCREDIST_VER = "14.28.29334" ?>
+<?define VCREDIST_X86_SIZE = "14328440" ?>
+<?define VCREDIST_X86_SHA1 = "17674FCC6CF3A2FFDC391BDCDE082AA936E37A89" ?>
+<?define VCREDIST_X86_UPGRADE_CODE = "65E5BD06-6392-3027-8C26-853107D3CF1A" ?>
+
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
@@ -14,25 +20,25 @@
     <WixVariable Id="WixUILicenseRtf" Value="" />
 
     <util:ProductSearch Id="VCREDIST_142_x86"
-                        UpgradeCode="65E5BD06-6392-3027-8C26-853107D3CF1A"
+                        UpgradeCode="$(var.VCREDIST_X86_UPGRADE_CODE)"
                         Result="version"
                         Variable="VCREDIST_142_x86" />
       
     <Chain>
-      <ExePackage Name="Microsoft Visual C++ 2015-2019 Redistributable"
+      <ExePackage Name="Microsoft Visual C++ 2015-2019 Redistributable - x86"
                   Cache="no"
                   PerMachine="yes"
                   Permanent="yes"
                   Vital="yes"
                   InstallCommand="/install /quiet /norestart"
-                  DetectCondition="VCREDIST_142_x86 &gt;= v14.28.29334"
-                  DownloadUrl="https://moonlight-stream.org/downloads/vcredist/14.28.29334/vcredist_x86.exe">
+                  DownloadUrl="https://moonlight-stream.org/downloads/vcredist/$(var.VCREDIST_VER)/vcredist_x86.exe"
+                  DetectCondition="VCREDIST_142_x86 &gt;= v$(var.VCREDIST_VER)">
         
-        <RemotePayload Description="Microsoft Visual C++ 2015-2019 Redistributable"
-                       ProductName="Microsoft Visual C++ 2015-2019 Redistributable"
-                       Size="14328440"
-                       Version="14.28.29334.0"
-                       Hash="17674FCC6CF3A2FFDC391BDCDE082AA936E37A89"/>
+        <RemotePayload Description="Microsoft Visual C++ 2015-2019 Redistributable - x86"
+                       ProductName="Microsoft Visual C++ 2015-2019 Redistributable - x86"
+                       Size="$(var.VCREDIST_X86_SIZE)"
+                       Version="$(var.VCREDIST_VER).0"
+                       Hash="$(var.VCREDIST_X86_SHA1)"/>
 
         <!-- Newer version installed is fine -->
         <ExitCode Value="1638" Behavior="success" />
