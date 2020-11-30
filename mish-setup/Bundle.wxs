@@ -27,6 +27,7 @@
     <Chain>
       <ExePackage Name="Microsoft Visual C++ 2015-2019 Redistributable - x86"
                   Cache="no"
+                  Compressed="no"
                   PerMachine="yes"
                   Permanent="yes"
                   Vital="yes"
