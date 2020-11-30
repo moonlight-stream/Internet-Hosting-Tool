@@ -57,6 +57,9 @@ static struct port_entry {
 
 static const int k_WolPorts[] = { 9, 47009 };
 
+static HANDLE s_StopEvent;
+static CRITICAL_SECTION s_PortMappingUpdateLock;
+
 bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const char* myAddr, int port, bool enable, bool indefinite, bool validationPass)
 {
     char intClient[16];
@@ -384,16 +387,20 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
 
     // Validate the rules are present and correct if they claimed to be added successfully
     if (success && enable) {
-        // Wait 10 seconds for the router state to quiesce
+        // Wait 10 seconds for the router state to quiesce or the stop event to be set
         printf("Waiting before UPnP port validation...");
-        Sleep(10000);
-        printf("done" NL);
+        if (WaitForSingleObject(s_StopEvent, 10000) == WAIT_TIMEOUT) {
+            printf("done" NL);
 
-        // Perform the validation pass (converting any now missing entries to permanent ones)
-        for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
-            if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false, true)) {
-                success = false;
+            // Perform the validation pass (converting any now missing entries to permanent ones)
+            for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
+                if (!UPnPMapPort(&urls, &data, k_Ports[i].proto, portMappingInternalAddress, k_Ports[i].port, enable, false, true)) {
+                    success = false;
+                }
             }
+        }
+        else {
+            printf("aborted" NL);
         }
     }
 
@@ -577,6 +584,12 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
             struct in_addr addr;
             addr.S_un.S_addr = inet_addr(targetAddressIP4);
             ipv4Devs = getUPnPDevicesByAddress(addr);
+        }
+
+        // Abort if this is an add/update request and we're stopping
+        if (enable && WaitForSingleObject(s_StopEvent, 0) == WAIT_OBJECT_0) {
+            printf("Aborting port mapping update due to stop request" NL);
+            goto Exit;
         }
 
         // Use the delay of discovery to also allow the NAT-PMP endpoint time to respond
@@ -876,11 +889,23 @@ DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
     return err;
 }
 
+int Initialize()
+{
+    // Create the stop event
+    s_StopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (s_StopEvent == NULL) {
+        return GetLastError();
+    }
+
+    InitializeCriticalSection(&s_PortMappingUpdateLock);
+    return 0;
+}
+
 int Run(bool standaloneExe)
 {
     HANDLE ifaceChangeEvent = CreateEvent(nullptr, true, false, nullptr);
     HANDLE gsChangeEvent = CreateEvent(nullptr, true, false, nullptr);
-    HANDLE events[2] = { ifaceChangeEvent, gsChangeEvent };
+    HANDLE events[3] = { ifaceChangeEvent, gsChangeEvent, s_StopEvent };
 
     ResetLogFile(standaloneExe);
 
@@ -915,7 +940,17 @@ int Run(bool standaloneExe)
             printf("GameStream is OFF!" NL);
         }
 
-        UpdatePortMappings(gameStreamEnabled);
+        // Acquire the mapping lock and update port mappings
+        if (TryEnterCriticalSection(&s_PortMappingUpdateLock)) {
+            // If the stop event is set, bail out now
+            if (WaitForSingleObject(s_StopEvent, 0) == WAIT_OBJECT_0) {
+                LeaveCriticalSection(&s_PortMappingUpdateLock);
+                return 0;
+            }
+
+            UpdatePortMappings(gameStreamEnabled);
+            LeaveCriticalSection(&s_PortMappingUpdateLock);
+        }
 
         // Refresh when half the duration is expired or if an IP interface
         // change event occurs.
@@ -939,6 +974,10 @@ int Run(bool standaloneExe)
             printf("Woke up for GameStream state change notification after %lld seconds" NL,
                 (GetTickCount64() - beforeSleepTime) / 1000);
         }
+        else if (ret == WAIT_OBJECT_0 + 2) {
+            printf("Woke up for stop notification" NL);
+            return 0;
+        }
         else {
             ResetLogFile(standaloneExe);
 
@@ -960,14 +999,21 @@ HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpConte
         return NO_ERROR;
 
     case SERVICE_CONTROL_STOP:
+        // Stop future port mapping updates
+        SetEvent(s_StopEvent);
+
         ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
         ServiceStatus.dwControlsAccepted = 0;
+        ServiceStatus.dwWaitHint = 120 * 1000; // 2 minutes
         SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
 
+        // Remove existing port mappings
+        EnterCriticalSection(&s_PortMappingUpdateLock);
         printf("Removing UPnP/NAT-PMP/PCP rules after service stop request\n");
         UpdatePortMappings(false);
+        LeaveCriticalSection(&s_PortMappingUpdateLock);
 
-        printf("The service is stopping\n");
+        printf("The service is stopping now\n");
         ServiceStatus.dwCurrentState = SERVICE_STOPPED;
         SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
         return NO_ERROR;
@@ -986,6 +1032,14 @@ ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
     ServiceStatusHandle = RegisterServiceCtrlHandlerEx(SERVICE_NAME, HandlerEx, NULL);
     if (ServiceStatusHandle == NULL) {
         fprintf(stderr, "RegisterServiceCtrlHandlerEx() failed: %d" NL, GetLastError());
+        return;
+    }
+
+    err = Initialize();
+    if (err != 0) {
+        ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+        ServiceStatus.dwWin32ExitCode = err;
+        SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
         return;
     }
 
@@ -1024,8 +1078,8 @@ int main(int argc, char* argv[])
     }
 
     if (argc == 2 && !strcmp(argv[1], "exe")) {
-        Run(true);
-        return 0;
+        Initialize();
+        return Run(true);
     }
 
     return StartServiceCtrlDispatcher(ServiceTable);
