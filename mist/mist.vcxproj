@@ -94,11 +94,14 @@
       </PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>..\libs\include;..\libs\include\miniupnpc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\libs\x86\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <CETCompat>true</CETCompat>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
@@ -116,10 +119,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <CETCompat>true</CETCompat>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
@@ -142,6 +148,7 @@
       </PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>..\libs\include;..\libs\include\miniupnpc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -149,6 +156,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\libs\x86\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <CETCompat>true</CETCompat>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
@@ -168,12 +176,14 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <CETCompat>true</CETCompat>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>mist.exe.manifest</AdditionalManifestFiles>
