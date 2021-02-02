@@ -319,10 +319,10 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
         return false;
     }
     else if (ret == 1) {
-        printf("Found a connected UPnP IGD" NL);
+        printf("Found a connected UPnP IGD (%s)" NL, urls.rootdescURL);
     }
     else if (ret == 2) {
-        printf("Found a disconnected UPnP IGD (!)" NL);
+        printf("Found a disconnected (!) UPnP IGD (%s)" NL, urls.rootdescURL);
 
         // Even if we are able to add forwarding entries, go ahead and try NAT-PMP
         success = false;
