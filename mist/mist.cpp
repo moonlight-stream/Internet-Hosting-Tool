@@ -402,12 +402,42 @@ bool IsZeroTierInstalled()
     return true;
 }
 
+PIP_ADAPTER_ADDRESSES
+AllocAndGetAdaptersAddresses(ULONG Family, ULONG Flags)
+{
+    PIP_ADAPTER_ADDRESSES addresses;
+    ULONG length;
+    ULONG error;
+
+    addresses = NULL;
+    length = GAA_INITIAL_SIZE;
+    do {
+        free(addresses);
+        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
+        if (addresses == NULL) {
+            fprintf(LOG_OUT, "malloc(%u) failed\n", length);
+            return NULL;
+        }
+
+        error = GetAdaptersAddresses(Family, Flags, NULL, addresses, &length);
+    } while (error == ERROR_BUFFER_OVERFLOW);
+
+    if (error != ERROR_SUCCESS) {
+        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
+        free(addresses);
+        return NULL;
+    }
+
+    return addresses;
+}
+
+
 enum PortTestStatus {
     PortTestOk,
     PortTestError,
     PortTestUnknown
 };
-PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withServer, bool isLoopbackRelay, bool mtuTest)
+PortTestStatus TestPort(PSOCKADDR_STORAGE addr, PSOCKADDR_STORAGE localBindAddr, int proto, int port, bool withServer, bool isLoopbackRelay, bool mtuTest)
 {
     SOCKET clientSock = INVALID_SOCKET, serverSock = INVALID_SOCKET;
     int err;
@@ -465,6 +495,21 @@ PortTestStatus TestPort(PSOCKADDR_STORAGE addr, int proto, int port, bool withSe
                 closesocket(serverSock);
                 return PortTestError;
             }
+        }
+    }
+
+    // Perform the explicit bind if a local address was provided
+    if (localBindAddr != nullptr) {
+        SOCKADDR_IN6 bind6;
+        int addrLen = localBindAddr->ss_family == AF_INET ?
+            sizeof(SOCKADDR_IN) : sizeof(SOCKADDR_IN6);
+
+        RtlCopyMemory(&bind6, localBindAddr, addrLen);
+        bind6.sin6_port = 0;
+
+        err = bind(clientSock, (struct sockaddr*)&bind6, addrLen);
+        if (err == SOCKET_ERROR) {
+            fprintf(LOG_OUT, "bind() failed: %d\n", WSAGetLastError());
         }
     }
 
@@ -673,7 +718,7 @@ Exit:
     return result;
 }
 
-bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool isLoopbackRelay, bool consolePrint, bool* allPortsFailed = nullptr)
+bool TestAllPorts(PSOCKADDR_STORAGE addr, PSOCKADDR_STORAGE localBindAddr, char* portMsg, int portMsgLen, bool isLoopbackRelay, bool consolePrint, bool* allPortsFailed = nullptr)
 {
     bool ret = true;
 
@@ -690,9 +735,12 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
                 k_Ports[i].port);
         }
 
-        if (!k_Ports[i].withServer) {
+        if (!k_Ports[i].withServer && (localBindAddr == nullptr || localBindAddr->ss_family == AF_INET)) {
             // Test using a real HTTP client if the port wasn't totally dead.
             // This is required to confirm functionality with the loopback relay.
+            // NB: We can't do this with IPv6 because we're not guaranteed that our outbound traffic
+            // will go out on the correct local IPv6 address, preventing a response from making
+            // it back.
             assert(k_Ports[i].proto == IPPROTO_TCP);
             fprintf(LOG_OUT, "Testing TCP %d with HTTP traffic...", k_Ports[i].port);
             status = TestHttpPort(addr, k_Ports[i].port, isLoopbackRelay);
@@ -701,7 +749,7 @@ bool TestAllPorts(PSOCKADDR_STORAGE addr, char* portMsg, int portMsgLen, bool is
             fprintf(LOG_OUT, "Testing %s %d...",
                 k_Ports[i].proto == IPPROTO_TCP ? "TCP" : "UDP",
                 k_Ports[i].port);
-            status = TestPort(addr, k_Ports[i].proto, k_Ports[i].port,
+            status = TestPort(addr, localBindAddr, k_Ports[i].proto, k_Ports[i].port,
                 k_Ports[i].withServer, isLoopbackRelay, k_Ports[i].port == 47998);
         }
 
@@ -861,6 +909,71 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
         inet_ntop(AF_INET, &((struct sockaddr_in*)addr)->sin_addr, addrStr, sizeof(addrStr));
     }
     else {
+        // There may be multiple IPv6 addresses on this interface, and chances are that the
+        // outbound address is a temporary IPv6 address which is not meant to receive traffic.
+        // Let's look up a suitable address by finding the correct interface and looking for
+        // an address with a non-random suffix.
+
+        PIP_ADAPTER_ADDRESSES addresses;
+        PIP_ADAPTER_ADDRESSES currentAdapter;
+        PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
+        
+        addresses = AllocAndGetAdaptersAddresses(AF_UNSPEC,
+            GAA_FLAG_SKIP_ANYCAST |
+            GAA_FLAG_SKIP_MULTICAST |
+            GAA_FLAG_SKIP_DNS_SERVER |
+            GAA_FLAG_SKIP_FRIENDLY_NAME);
+        if (addresses == NULL) {
+            return false;
+        }
+
+        // First, find the interface that owns the incoming address
+        currentAdapter = addresses;
+        while (currentAdapter != NULL) {
+            // Check if this interface has the IPv6 address we want
+            currentAddress = currentAdapter->FirstUnicastAddress;
+            while (currentAddress != NULL) {
+                if (currentAddress->Address.lpSockaddr->sa_family == AF_INET6) {
+                    PSOCKADDR_IN6 ifaceAddrV6 = (PSOCKADDR_IN6)currentAddress->Address.lpSockaddr;
+                    if (RtlEqualMemory(&((struct sockaddr_in6*)addr)->sin6_addr, &ifaceAddrV6->sin6_addr, sizeof(IN6_ADDR))) {
+                        break;
+                    }
+                }
+
+                currentAddress = currentAddress->Next;
+            }
+
+            if (currentAddress != NULL) {
+                // It does, bail out
+                break;
+            }
+
+            currentAdapter = currentAdapter->Next;
+        }
+
+        // Check if we found the incoming interface. If not, we'll
+        // just return the IP address as given from getsockname().
+        if (currentAdapter != NULL) {
+            // Now find a non-privacy/non-LL IPv6 address on this interface
+            currentAddress = currentAdapter->FirstUnicastAddress;
+            while (currentAddress != NULL) {
+                if (currentAddress->Address.lpSockaddr->sa_family == AF_INET6) {
+                    // Exclude link-local and privacy addresses and deprecated addresses
+                    PSOCKADDR_IN6 currentAddrV6 = (PSOCKADDR_IN6)currentAddress->Address.lpSockaddr;
+                    if (currentAddrV6->sin6_scope_id == 0 &&
+                        currentAddress->SuffixOrigin != IpSuffixOriginRandom &&
+                        currentAddress->DadState != IpDadStateDeprecated) {
+                        RtlCopyMemory(addr, currentAddress->Address.lpSockaddr, currentAddress->Address.iSockaddrLength);
+                        break;
+                    }
+                }
+
+                currentAddress = currentAddress->Next;
+            }
+        }
+
+        free(addresses);
+
         inet_ntop(AF_INET6, &((struct sockaddr_in6*)addr)->sin6_addr, addrStr, sizeof(addrStr));
     }
     fprintf(LOG_OUT, "%s\n", addrStr);
@@ -871,35 +984,16 @@ bool FindLocalInterfaceIPAddress(int family, PSOCKADDR_STORAGE addr)
 bool FindZeroTierInterfaceAddress(PSOCKADDR_STORAGE addr)
 {
     PIP_ADAPTER_ADDRESSES addresses;
-    ULONG error;
-    ULONG length;
     PIP_ADAPTER_ADDRESSES currentAdapter;
     PIP_ADAPTER_UNICAST_ADDRESS currentAddress;
 
-    addresses = NULL;
-    length = GAA_INITIAL_SIZE;
-    do {
-        free(addresses);
-        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
-        if (addresses == NULL) {
-            fprintf(LOG_OUT, "malloc(%u) failed\n", length);
-            return false;
-        }
-
-        // Get all IPv4 interfaces
-        error = GetAdaptersAddresses(AF_INET,
-            GAA_FLAG_SKIP_ANYCAST |
-            GAA_FLAG_SKIP_MULTICAST |
-            GAA_FLAG_SKIP_DNS_SERVER |
-            GAA_FLAG_SKIP_FRIENDLY_NAME,
-            NULL,
-            addresses,
-            &length);
-    } while (error == ERROR_BUFFER_OVERFLOW);
-
-    if (error != ERROR_SUCCESS) {
-        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
-        free(addresses);
+    // Get all IPv4 interfaces
+    addresses = AllocAndGetAdaptersAddresses(AF_INET,
+        GAA_FLAG_SKIP_ANYCAST |
+        GAA_FLAG_SKIP_MULTICAST |
+        GAA_FLAG_SKIP_DNS_SERVER |
+        GAA_FLAG_SKIP_FRIENDLY_NAME);
+    if (addresses == nullptr) {
         return false;
     }
 
@@ -931,7 +1025,6 @@ bool FindDuplicateDefaultInterfaces(void)
 {
     PIP_ADAPTER_ADDRESSES addresses;
     ULONG error;
-    ULONG length;
     MIB_IPFORWARDROW defaultRoute;
     PIP_ADAPTER_ADDRESSES currentAdapter;
     DWORD matchingInterfaces = 0;
@@ -942,32 +1035,15 @@ bool FindDuplicateDefaultInterfaces(void)
         return false;
     }
 
-    addresses = NULL;
-    length = GAA_INITIAL_SIZE;
-    do {
-        free(addresses);
-        addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
-        if (addresses == NULL) {
-            fprintf(LOG_OUT, "malloc(%u) failed\n", length);
-            return false;
-        }
-
-        // Get all IPv4 interfaces
-        error = GetAdaptersAddresses(AF_INET,
-            GAA_FLAG_SKIP_UNICAST |
-            GAA_FLAG_SKIP_ANYCAST |
-            GAA_FLAG_SKIP_MULTICAST |
-            GAA_FLAG_SKIP_DNS_SERVER |
-            GAA_FLAG_INCLUDE_GATEWAYS |
-            GAA_FLAG_SKIP_FRIENDLY_NAME,
-            NULL,
-            addresses,
-            &length);
-    } while (error == ERROR_BUFFER_OVERFLOW);
-
-    if (error != ERROR_SUCCESS) {
-        fprintf(LOG_OUT, "GetAdaptersAddresses() failed: %d\n", error);
-        free(addresses);
+    // Get all IPv4 interfaces
+    addresses = AllocAndGetAdaptersAddresses(AF_INET,
+        GAA_FLAG_SKIP_UNICAST |
+        GAA_FLAG_SKIP_ANYCAST |
+        GAA_FLAG_SKIP_MULTICAST |
+        GAA_FLAG_SKIP_DNS_SERVER |
+        GAA_FLAG_INCLUDE_GATEWAYS |
+        GAA_FLAG_SKIP_FRIENDLY_NAME);
+    if (addresses == nullptr) {
         return false;
     }
 
@@ -1326,7 +1402,7 @@ int main(int argc, char* argv[])
     sin.sin_family = AF_INET;
     sin.sin_addr = in4addr_loopback;
     fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
+    if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -1360,7 +1436,7 @@ int main(int argc, char* argv[])
             // Try to connect via ZeroTier address
             fprintf(CONSOLE_OUT, "Testing GameStream connectivity using ZeroTier...\n");
             fprintf(LOG_OUT, "Testing GameStream ports via ZeroTier\n");
-            if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
+            if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
                 snprintf(msgBuf, sizeof(msgBuf),
                     "ZeroTier connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
                 DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -1377,9 +1453,8 @@ int main(int argc, char* argv[])
     }
 
     bool hasV4Connectivity, hasV6Connectivity;
+    SOCKADDR_STORAGE v4, v6;
     {
-        SOCKADDR_STORAGE v4, v6;
-
         hasV4Connectivity = FindLocalInterfaceIPAddress(AF_INET, &v4);
         hasV6Connectivity = FindLocalInterfaceIPAddress(AF_INET6, &v6);
 
@@ -1400,7 +1475,7 @@ int main(int argc, char* argv[])
 
     // Try to connect via LAN address
     fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
-    if (!TestAllPorts(&ss, portMsgBuf, sizeof(portMsgBuf), false, true)) {
+    if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
             "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
@@ -1426,7 +1501,7 @@ int main(int argc, char* argv[])
 
             // We don't actually care about the outcome here but it's nice to have in logs
             // to determine whether solving the double NAT will actually make Moonlight work.
-            TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, portMsgBuf, sizeof(portMsgBuf), false, false);
+            TestAllPorts((PSOCKADDR_STORAGE)&locallyReportedWanAddr, &ss, portMsgBuf, sizeof(portMsgBuf), false, false);
 
             fprintf(LOG_OUT, "Detected inconsistency between UPnP/NAT-PMP and STUN reported WAN addresses!\n");
         }
@@ -1465,7 +1540,7 @@ int main(int argc, char* argv[])
 
                 testServerWasReachable = true;
 
-                if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, portMsgBuf, sizeof(portMsgBuf), true, true, &allPortsFailedOnV4)) {
+                if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, &v4, portMsgBuf, sizeof(portMsgBuf), true, true, &allPortsFailedOnV4)) {
                     freeaddrinfo(result);
                     snprintf(msgBuf, sizeof(msgBuf), "This PC is ready to host over the Internet!\n\n"
                         "Do not uninstall the Moonlight Internet Hosting Tool, unless you no longer want to stream over the Internet. It needs to remain installed on your PC to maintain the port forwarding entries on your router.\n\n"
@@ -1497,7 +1572,7 @@ int main(int argc, char* argv[])
 
                 // Pass the portMsgBuf only if we've detected an IPv6-only setup. Otherwise, we want to preserve
                 // the failing ports from the IPv4 to display in the error dialog.
-                if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr,
+                if (TestAllPorts((PSOCKADDR_STORAGE)current->ai_addr, &v6,
                                     ss.ss_family == AF_INET6 ? portMsgBuf : NULL,
                                     ss.ss_family == AF_INET6 ? sizeof(portMsgBuf) : 0, true, true)) {
                     // We will terminate the test at the IPv6 limited connectivity warning in the following cases:
