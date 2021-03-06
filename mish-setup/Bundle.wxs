@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?define VCREDIST_VER = "14.28.29334" ?>
-<?define VCREDIST_X86_SIZE = "14328440" ?>
-<?define VCREDIST_X86_SHA1 = "17674FCC6CF3A2FFDC391BDCDE082AA936E37A89" ?>
+<?define VCREDIST_VER = "14.28.29910" ?>
+<?define VCREDIST_X86_SIZE = "14308616" ?>
+<?define VCREDIST_X86_SHA1 = "CC6D8F9286645F2A11BCAE9D0E000CF012B08112" ?>
+<?define VCREDIST_X86_URL = "https://download.visualstudio.microsoft.com/download/pr/d64b93c3-f270-4750-9e75-bc12b2e899fb/4521ED84B9B1679A706E719423D54EF5E413DC50DDE1CF362232D7359D7E89C4/VC_redist.x86.exe" ?>
 <?define VCREDIST_X86_UPGRADE_CODE = "65E5BD06-6392-3027-8C26-853107D3CF1A" ?>
 
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
@@ -32,7 +33,7 @@
                   Permanent="yes"
                   Vital="yes"
                   InstallCommand="/install /quiet /norestart"
-                  DownloadUrl="https://moonlight-stream.org/downloads/vcredist/$(var.VCREDIST_VER)/vcredist_x86.exe"
+                  DownloadUrl="$(var.VCREDIST_X86_URL)"
                   DetectCondition="VCREDIST_142_x86 &gt;= v$(var.VCREDIST_VER)">
         
         <RemotePayload Description="Microsoft Visual C++ 2015-2019 Redistributable - x86"
