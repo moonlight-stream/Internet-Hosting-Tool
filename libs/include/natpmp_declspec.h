@@ -1,5 +1,5 @@
-#ifndef DECLSPEC_H_INCLUDED
-#define DECLSPEC_H_INCLUDED
+#ifndef NATPMP_DECLSPEC_H_INCLUDED
+#define NATPMP_DECLSPEC_H_INCLUDED
 
 #if defined(_WIN32) && !defined(NATPMP_STATICLIB)
 	/* for windows dll */
