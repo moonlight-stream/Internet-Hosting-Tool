@@ -32,8 +32,6 @@ bool getHopsIP4(IN_ADDR* hopAddress, int* hopAddressCount);
 struct UPNPDev* getUPnPDevicesByAddress(IN_ADDR address);
 bool PCPMapPort(PSOCKADDR_STORAGE localAddr, int localAddrLen, PSOCKADDR_STORAGE pcpAddr, int pcpAddrLen, int proto, int port, bool enable, bool indefinite);
 
-#define NL "\n"
-
 #define SERVICE_NAME "MISS"
 #define UPNP_SERVICE_NAME "Moonlight"
 #define POLLING_DELAY_SEC 120
@@ -99,7 +97,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         intClient, intPort, desc, enabled, leaseDuration);
     if (err == 714) {
         // NoSuchEntryInArray
-        printf("NOT FOUND" NL);
+        printf("NOT FOUND\n");
 
         if (validationPass) {
             // On validation, we found a missing entry. Convert this entry to indefinite
@@ -108,7 +106,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         }
     }
     else if (err == 606) {
-        printf("UNAUTHORIZED" NL);
+        printf("UNAUTHORIZED\n");
 
         // If we're just validating, we're done. We can't know if the entry was
         // actually applied but we'll return true to avoid false errors if it was.
@@ -120,7 +118,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         // Some routers change the description, so we can't check that here
         if (!strcmp(intClient, myAddr)) {
             if (atoi(leaseDuration) == 0) {
-                printf("OK (Static, Internal port: %s)" NL, intPort);
+                printf("OK (Static, Internal port: %s)\n", intPort);
 
                 // If we have an existing permanent mapping, we can just leave it alone.
                 if (enable) {
@@ -128,7 +126,7 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
                 }
             }
             else {
-                printf("OK (%s seconds remaining, Internal port: %s)" NL, leaseDuration, intPort);
+                printf("OK (%s seconds remaining, Internal port: %s)\n", leaseDuration, intPort);
             }
 
             // If we're just validating, we found an entry, so we're done.
@@ -141,17 +139,17 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
                 printf("Deleting UPnP mapping for %s %s -> %s...", protoStr, portStr, myAddr);
                 err = UPNP_DeletePortMapping(urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr);
                 if (err == UPNPCOMMAND_SUCCESS) {
-                    printf("OK" NL);
+                    printf("OK\n");
                 }
                 else {
-                    printf("ERROR %d" NL, err);
+                    printf("ERROR %d\n", err);
                 }
 
                 return true;
             }
         }
         else {
-            printf("CONFLICT: %s %s" NL, intClient, desc);
+            printf("CONFLICT: %s %s\n", intClient, desc);
 
             // If we're just validating, we found an entry, so we're done.
             if (validationPass) {
@@ -166,21 +164,21 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
                 printf("Trying to delete conflicting UPnP mapping for %s %s -> %s...", protoStr, portStr, intClient);
                 err = UPNP_DeletePortMapping(urls->controlURL, data->first.servicetype, portStr, protoStr, nullptr);
                 if (err == UPNPCOMMAND_SUCCESS) {
-                    printf("OK" NL);
+                    printf("OK\n");
                 }
                 else if (err == 606) {
-                    printf("UNAUTHORIZED" NL);
+                    printf("UNAUTHORIZED\n");
                     return false;
                 }
                 else {
-                    printf("ERROR %d" NL, err);
+                    printf("ERROR %d\n", err);
                     return false;
                 }
             }
         }
     }
     else {
-        printf("ERROR %d (%s)" NL, err, strupnperror(err));
+        printf("ERROR %d (%s)\n", err, strupnperror(err));
 
         // If we get a strange error from the router, we'll assume it's some old broken IGDv1
         // device and only use indefinite lease durations to hopefully avoid confusing it.
@@ -226,11 +224,11 @@ bool UPnPMapPort(struct UPNPUrls* urls, struct IGDdatas* data, int proto, const 
         printf("ALTERNATE ");
     }
     if (err == UPNPCOMMAND_SUCCESS) {
-        printf("OK" NL);
+        printf("OK\n");
         return true;
     }
     else {
-        printf("ERROR %d (%s)" NL, err, strupnperror(err));
+        printf("ERROR %d (%s)\n", err, strupnperror(err));
         return false;
     }
 }
@@ -252,7 +250,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
         free(addresses);
         addresses = (PIP_ADAPTER_ADDRESSES)malloc(length);
         if (addresses == NULL) {
-            printf("malloc(%u) failed" NL, length);
+            printf("malloc(%u) failed\n", length);
             return false;
         }
 
@@ -268,7 +266,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
     } while (error == ERROR_BUFFER_OVERFLOW);
 
     if (error != ERROR_SUCCESS) {
-        printf("GetAdaptersAddresses() failed: %d" NL, error);
+        printf("GetAdaptersAddresses() failed: %d\n", error);
         free(addresses);
         return false;
     }
@@ -294,7 +292,7 @@ bool GetIP4OnLinkPrefixLength(char* lanAddressString, int* prefixLength)
         currentAdapter = currentAdapter->Next;
     }
 
-    printf("No adapter found with IPv4 address: %s" NL, lanAddressString);
+    printf("No adapter found with IPv4 address: %s\n", lanAddressString);
     free(addresses);
     return false;
 }
@@ -310,31 +308,31 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
 
     int ret = UPNP_GetValidIGD(list, &urls, &data, localAddress, sizeof(localAddress));
     if (ret == 0) {
-        printf("No UPnP device found!" NL);
+        printf("No UPnP device found!\n");
         return false;
     }
     else if (ret == 3) {
-        printf("No UPnP IGD found!" NL);
+        printf("No UPnP IGD found!\n");
         FreeUPNPUrls(&urls);
         return false;
     }
     else if (ret == 1) {
-        printf("Found a connected UPnP IGD (%s)" NL, urls.rootdescURL);
+        printf("Found a connected UPnP IGD (%s)\n", urls.rootdescURL);
     }
     else if (ret == 2) {
-        printf("Found a disconnected (!) UPnP IGD (%s)" NL, urls.rootdescURL);
+        printf("Found a disconnected (!) UPnP IGD (%s)\n", urls.rootdescURL);
 
         // Even if we are able to add forwarding entries, go ahead and try NAT-PMP
         success = false;
     }
     else {
-        printf("UPNP_GetValidIGD() failed: %d" NL, ret);
+        printf("UPNP_GetValidIGD() failed: %d\n", ret);
         return false;
     }
 
     ret = UPNP_GetExternalIPAddress(urls.controlURL, data.first.servicetype, wanAddr);
     if (ret == UPNPCOMMAND_SUCCESS) {
-        printf("UPnP IGD WAN address is: %s" NL, wanAddr);
+        printf("UPnP IGD WAN address is: %s\n", wanAddr);
     }
     else {
         // Empty string
@@ -390,7 +388,7 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
         // Wait 10 seconds for the router state to quiesce or the stop event to be set
         printf("Waiting before UPnP port validation...");
         if (WaitForSingleObject(s_StopEvent, 10000) == WAIT_TIMEOUT) {
-            printf("done" NL);
+            printf("done\n");
 
             // Perform the validation pass (converting any now missing entries to permanent ones)
             for (int i = 0; i < ARRAYSIZE(k_Ports); i++) {
@@ -400,7 +398,7 @@ bool UPnPHandleDeviceList(struct UPNPDev* list, bool enable, char* lanAddrOverri
             }
         }
         else {
-            printf("aborted" NL);
+            printf("aborted\n");
         }
     }
 
@@ -440,7 +438,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
     printf("Updating NAT-PMP port mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", port);
     int err = sendnewportmappingrequest(natpmp, natPmpProto, port, enable ? port : 0, lifetime);
     if (err < 0) {
-        printf("ERROR %d" NL, err);
+        printf("ERROR %d\n", err);
         return false;
     }
 
@@ -456,7 +454,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
         err = getnatpmprequesttimeout(natpmp, &timeout);
         if (err != 0) {
             assert(err == 0);
-            printf("WAIT FAILED: %d" NL, err);
+            printf("WAIT FAILED: %d\n", err);
             return false;
         }
 
@@ -466,22 +464,22 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
     } while (err == NATPMP_TRYAGAIN);
 
     if (err != 0) {
-        printf("FAILED %d" NL, err);
+        printf("FAILED %d\n", err);
         return false;
     }
     else if (response.pnu.newportmapping.lifetime == 0 && !enable) {
-        printf("DELETED" NL);
+        printf("DELETED\n");
         return true;
     }
     else if (response.pnu.newportmapping.mappedpublicport != port) {
-        printf("CONFLICT" NL);
+        printf("CONFLICT\n");
 
         // It couldn't assign us the external port we requested and gave us an alternate external port.
         // We can't use this alternate mapping, so immediately release it.
         printf("Deleting unwanted NAT-PMP mapping for %s %d...", proto == IPPROTO_TCP ? "TCP" : "UDP", response.pnu.newportmapping.mappedpublicport);
         err = sendnewportmappingrequest(natpmp, natPmpProto, response.pnu.newportmapping.privateport, 0, 0);
         if (err < 0) {
-            printf("ERROR %d" NL, err);
+            printf("ERROR %d\n", err);
             return false;
         }
         else {
@@ -495,7 +493,7 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
                 err = getnatpmprequesttimeout(natpmp, &timeout);
                 if (err != 0) {
                     assert(err == 0);
-                    printf("WAIT FAILED: %d" NL, err);
+                    printf("WAIT FAILED: %d\n", err);
                     return false;
                 }
 
@@ -505,17 +503,17 @@ bool NATPMPMapPort(natpmp_t* natpmp, int proto, int port, bool enable, bool inde
             } while (err == NATPMP_TRYAGAIN);
 
             if (err == 0) {
-                printf("OK" NL);
+                printf("OK\n");
                 return false;
             }
             else {
-                printf("FAILED %d" NL, err);
+                printf("FAILED %d\n", err);
                 return false;
             }
         }
     }
     else {
-        printf("OK (%d seconds remaining)" NL, response.pnu.newportmapping.lifetime);
+        printf("OK (%d seconds remaining)\n", response.pnu.newportmapping.lifetime);
         return true;
     }
 }
@@ -537,7 +535,7 @@ bool IsGameStreamEnabled()
     error = RegQueryValueExA(key, "EnableStreaming", nullptr, nullptr, (LPBYTE)&enabled, &len);
     RegCloseKey(key);
     if (error != ERROR_SUCCESS) {
-        printf("RegQueryValueExA() failed: %d" NL, error);
+        printf("RegQueryValueExA() failed: %d\n", error);
         return false;
     }
 
@@ -552,18 +550,18 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
     char upstreamAddrNatPmp[128] = {};
     char upstreamAddrUPnP[128] = {};
 
-    printf("Starting port mapping update on %s to %s..." NL,
+    printf("Starting port mapping update on %s to %s...\n",
         targetAddressIP4 ? targetAddressIP4 : "default gateway",
         internalAddressIP4 ? internalAddressIP4 : "local machine");
 
     int natPmpErr = initnatpmp(&natpmp, targetAddressIP4 ? 1 : 0, targetAddressIP4 ? inet_addr(targetAddressIP4) : 0);
     if (natPmpErr != 0) {
-        printf("initnatpmp() failed: %d" NL, natPmpErr);
+        printf("initnatpmp() failed: %d\n", natPmpErr);
     }
     else {
         natPmpErr = sendpublicaddressrequest(&natpmp);
         if (natPmpErr < 0) {
-            printf("sendpublicaddressrequest() failed: %d" NL, natPmpErr);
+            printf("sendpublicaddressrequest() failed: %d\n", natPmpErr);
             closenatpmp(&natpmp);
         }
     }
@@ -577,7 +575,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         if (targetAddressIP4 == nullptr) {
             // If we have no target, use discovery to find the first hop
             ipv4Devs = upnpDiscoverAll(UPNP_DISCOVERY_DELAY_MS, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 0, 2, &upnpErr);
-            printf("UPnP IPv4 IGD discovery completed with error code: %d" NL, upnpErr);
+            printf("UPnP IPv4 IGD discovery completed with error code: %d\n", upnpErr);
         }
         else {
             // We have a specified target, so do discovery against that directly (may be outside our subnet in case of double-NAT)
@@ -588,7 +586,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
 
         // Abort if this is an add/update request and we're stopping
         if (enable && WaitForSingleObject(s_StopEvent, 0) == WAIT_OBJECT_0) {
-            printf("Aborting port mapping update due to stop request" NL);
+            printf("Aborting port mapping update due to stop request\n");
             goto Exit;
         }
 
@@ -598,17 +596,17 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
             natPmpErr = readnatpmpresponseorretry(&natpmp, &response);
             if (natPmpErr == 0) {
                 inet_ntop(AF_INET, &response.pnu.publicaddress.addr, upstreamAddrNatPmp, sizeof(upstreamAddrNatPmp));
-                printf("NAT-PMP upstream address is: %s" NL, upstreamAddrNatPmp);
+                printf("NAT-PMP upstream address is: %s\n", upstreamAddrNatPmp);
             }
             else {
-                printf("NAT-PMP public address request failed: %d" NL, natPmpErr);
+                printf("NAT-PMP public address request failed: %d\n", natPmpErr);
                 closenatpmp(&natpmp);
             }
         }
 
         // Don't try NAT-PMP if UPnP succeeds
         if (UPnPHandleDeviceList(ipv4Devs, enable, internalAddressIP4, upstreamAddrUPnP)) {
-            printf("UPnP IPv4 port mapping successful" NL);
+            printf("UPnP IPv4 port mapping successful\n");
             if (enable) {
                 // We still want to try NAT-PMP if we're removing
                 // rules to ensure any NAT-PMP rules get cleaned up
@@ -627,7 +625,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         // if we created the rules we'd be deleting. Since we don't have that, we can't
         // safely remove mappings that could be shared by another machine behind a double NAT.
         if (!enable && targetAddressIP4 != nullptr) {
-            printf("Not removing upstream NAT-PMP mappings on non-default gateway device" NL);
+            printf("Not removing upstream NAT-PMP mappings on non-default gateway device\n");
             tryNatPmp = false;
         }
 
@@ -663,7 +661,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
             }
 
             if (success) {
-                printf("NAT-PMP IPv4 port mapping successful" NL);
+                printf("NAT-PMP IPv4 port mapping successful\n");
 
                 // Always try all possibilities when disabling to ensure
                 // we completely clean up
@@ -695,7 +693,7 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
                 targetAddr.sin_addr.S_un.S_addr = route.dwForwardNextHop;
             }
             else {
-                printf("GetBestRoute() failed: %d" NL, error);
+                printf("GetBestRoute() failed: %d\n", error);
                 goto Exit;
             }
         }
@@ -723,22 +721,22 @@ void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* inte
         }
 
         if (success) {
-            printf("PCP IPv4 port mapping successful" NL);
+            printf("PCP IPv4 port mapping successful\n");
         }
     }
 
 Exit:
     // Write this at the end to avoid clobbering an input parameter
     if (upstreamAddrNatPmp[0] != 0 && inet_addr(upstreamAddrNatPmp) != 0) {
-        printf("Using NAT-PMP upstream IPv4 address: %s" NL, upstreamAddrNatPmp);
+        printf("Using NAT-PMP upstream IPv4 address: %s\n", upstreamAddrNatPmp);
         strcpy(upstreamAddressIP4, upstreamAddrNatPmp);
     }
     else if (upstreamAddrUPnP[0] != 0 && inet_addr(upstreamAddrUPnP) != 0) {
-        printf("Using UPnP upstream IPv4 address: %s" NL, upstreamAddrUPnP);
+        printf("Using UPnP upstream IPv4 address: %s\n", upstreamAddrUPnP);
         strcpy(upstreamAddressIP4, upstreamAddrUPnP);
     }
     else {
-        printf("No valid upstream IPv4 address found!" NL);
+        printf("No valid upstream IPv4 address found!\n");
         upstreamAddressIP4[0] = 0;
     }
 }
@@ -774,12 +772,12 @@ void UpdatePortMappings(bool enable)
     char upstreamAddrStr[128];
     unsigned long upstreamAddr;
 
-    printf("Finding upstream IPv4 hops via traceroute..." NL);
+    printf("Finding upstream IPv4 hops via traceroute...\n");
     if (!getHopsIP4(hops, &hopCount)) {
         hopCount = 0;
     }
     else {
-        printf("Found %d hops" NL, hopCount);
+        printf("Found %d hops\n", hopCount);
     }
 
     // getHopsIP4() already skips the default gateway, so 0
@@ -791,10 +789,10 @@ void UpdatePortMappings(bool enable)
     while (upstreamAddrStr[0] != 0 && (upstreamAddr = inet_addr(upstreamAddrStr)) != 0) {
         // We got an upstream address. Let's check if this is a NAT
         if (IsLikelyNAT(upstreamAddr)) {
-            printf("Upstream address %s is likely a NAT" NL, upstreamAddrStr);
+            printf("Upstream address %s is likely a NAT\n", upstreamAddrStr);
 
             if (nextHopIndex >= hopCount) {
-                printf("Traceroute didn't reach this hop! Aborting!" NL);
+                printf("Traceroute didn't reach this hop! Aborting!\n");
                 break;
             }
 
@@ -808,7 +806,7 @@ void UpdatePortMappings(bool enable)
         }
         else {
             // If we reach a proper public IP address, we're done
-            printf("Reached the Internet at hop %d" NL, nextHopIndex);
+            printf("Reached the Internet at hop %d\n", nextHopIndex);
             break;
         }
 
@@ -848,12 +846,12 @@ void ResetLogFile(bool standaloneExe)
     }
 
     // Print a log header
-    printf("Moonlight Internet Streaming Service v" VER_VERSION_STR NL);
+    printf("Moonlight Internet Streaming Service v" VER_VERSION_STR "\n");
 
     // Print the current time
     GetSystemTime(&time);
     GetTimeFormatA(LOCALE_SYSTEM_DEFAULT, 0, &time, "hh':'mm':'ss tt", timeString, ARRAYSIZE(timeString));
-    printf("The current UTC time is: %s" NL, timeString);
+    printf("The current UTC time is: %s\n", timeString);
 }
 
 DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
@@ -934,10 +932,10 @@ int Run(bool standaloneExe)
         bool gameStreamEnabled = IsGameStreamEnabled();
 
         if (gameStreamEnabled) {
-            printf("GameStream is ON!" NL);
+            printf("GameStream is ON!\n");
         }
         else {
-            printf("GameStream is OFF!" NL);
+            printf("GameStream is OFF!\n");
         }
 
         // Acquire the mapping lock and update port mappings
@@ -954,7 +952,7 @@ int Run(bool standaloneExe)
 
         // Refresh when half the duration is expired or if an IP interface
         // change event occurs.
-        printf("Going to sleep..." NL);
+        printf("Going to sleep...\n");
         fflush(stdout);
 
         ULONGLONG beforeSleepTime = GetTickCount64();
@@ -962,7 +960,7 @@ int Run(bool standaloneExe)
         if (ret == WAIT_OBJECT_0) {
             ResetLogFile(standaloneExe);
 
-            printf("Woke up for interface change notification after %lld seconds" NL,
+            printf("Woke up for interface change notification after %lld seconds\n",
                 (GetTickCount64() - beforeSleepTime) / 1000);
 
             // Wait a little bit for the interface to settle down (DHCP, RA, etc)
@@ -971,17 +969,17 @@ int Run(bool standaloneExe)
         else if (ret == WAIT_OBJECT_0 + 1) {
             ResetLogFile(standaloneExe);
 
-            printf("Woke up for GameStream state change notification after %lld seconds" NL,
+            printf("Woke up for GameStream state change notification after %lld seconds\n",
                 (GetTickCount64() - beforeSleepTime) / 1000);
         }
         else if (ret == WAIT_OBJECT_0 + 2) {
-            printf("Woke up for stop notification" NL);
+            printf("Woke up for stop notification\n");
             return 0;
         }
         else {
             ResetLogFile(standaloneExe);
 
-            printf("Woke up for periodic refresh" NL);
+            printf("Woke up for periodic refresh\n");
         }
     }
 }
@@ -1031,7 +1029,7 @@ ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 
     ServiceStatusHandle = RegisterServiceCtrlHandlerEx(SERVICE_NAME, HandlerEx, NULL);
     if (ServiceStatusHandle == NULL) {
-        fprintf(stderr, "RegisterServiceCtrlHandlerEx() failed: %d" NL, GetLastError());
+        fprintf(stderr, "RegisterServiceCtrlHandlerEx() failed: %d\n", GetLastError());
         return;
     }
 
