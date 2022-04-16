@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?define VCREDIST_VER = "14.29.30133" ?>
-<?define VCREDIST_X86_SIZE = "13782872" ?>
-<?define VCREDIST_X86_SHA1 = "2C1AE47103E7F8D6072DF4A8D9CEB382724AC59B" ?>
-<?define VCREDIST_X86_URL = "https://download.visualstudio.microsoft.com/download/pr/221ed2ae-1269-497b-a962-e113045001fa/1ACD8D5EA1CDC3EB2EB4C87BE3AB28722D0825C15449E5C9CEEF95D897DE52FA/VC_redist.x86.exe" ?>
+<?define VCREDIST_VER = "14.31.31103" ?>
+<?define VCREDIST_X86_SIZE = "13725768" ?>
+<?define VCREDIST_X86_SHA1 = "15fe8e70c3c5582b70df173cd9b580331677735a" ?>
+<?define VCREDIST_X86_URL = "https://download.visualstudio.microsoft.com/download/pr/144a5711-f076-44fa-bf55-f7e0121eb30c/B7AE307237F869E09F7413691A2CD1944357B5CEE28049C0A0D3430B47BB3EDC/VC_redist.x86.exe" ?>
 <?define VCREDIST_X86_UPGRADE_CODE = "65E5BD06-6392-3027-8C26-853107D3CF1A" ?>
 
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
@@ -20,13 +20,13 @@
 
     <WixVariable Id="WixUILicenseRtf" Value="" />
 
-    <util:ProductSearch Id="VCREDIST_142_x86"
+    <util:ProductSearch Id="VCREDIST_14_x86"
                         UpgradeCode="$(var.VCREDIST_X86_UPGRADE_CODE)"
                         Result="version"
-                        Variable="VCREDIST_142_x86" />
+                        Variable="VCREDIST_14_x86" />
       
     <Chain>
-      <ExePackage Name="Microsoft Visual C++ 2015-2019 Redistributable - x86"
+      <ExePackage Name="Microsoft Visual C++ 2015-2022 Redistributable - x86"
                   Cache="no"
                   Compressed="no"
                   PerMachine="yes"
@@ -34,10 +34,10 @@
                   Vital="yes"
                   InstallCommand="/install /quiet /norestart"
                   DownloadUrl="$(var.VCREDIST_X86_URL)"
-                  DetectCondition="VCREDIST_142_x86 &gt;= v$(var.VCREDIST_VER)">
+                  DetectCondition="VCREDIST_14_x86 &gt;= v$(var.VCREDIST_VER)">
         
-        <RemotePayload Description="Microsoft Visual C++ 2015-2019 Redistributable - x86"
-                       ProductName="Microsoft Visual C++ 2015-2019 Redistributable - x86"
+        <RemotePayload Description="Microsoft Visual C++ 2015-2022 Redistributable - x86"
+                       ProductName="Microsoft Visual C++ 2015-2022 Redistributable - x86"
                        Size="$(var.VCREDIST_X86_SIZE)"
                        Version="$(var.VCREDIST_VER).0"
                        Hash="$(var.VCREDIST_X86_SHA1)"/>
