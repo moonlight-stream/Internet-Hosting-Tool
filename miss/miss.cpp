@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <io.h>
+#include <fcntl.h>
 
 #include "relay.h"
 #include "..\version.h"
@@ -834,15 +836,27 @@ void ResetLogFile(bool standaloneExe)
         ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-old.log", oldLogFilePath, sizeof(oldLogFilePath));
         ExpandEnvironmentStringsA("%ProgramData%\\MISS\\miss-current.log", currentLogFilePath, sizeof(currentLogFilePath));
 
-        // Close the existing stdout handle. This is important because otherwise
-        // it may still be open as stdout when we try to MoveFileEx below.
-        fclose(stdout);
-
         // Rotate the current to the old log file
         MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
 
+        // Open the new log file
+        HANDLE newLogHandle = CreateFileA(currentLogFilePath,
+                                          GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          CREATE_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL,
+                                          nullptr);
+        if (newLogHandle == INVALID_HANDLE_VALUE) {
+            return;
+        }
+
+        // Convert the HANDLE to an fd (transfers ownership too)
+        int fd = _open_osfhandle((intptr_t)newLogHandle, _O_WRONLY);
+
         // Redirect stdout to this new file
-        freopen(currentLogFilePath, "w", stdout);
+        _dup2(fd, _fileno(stdout));
+        _close(fd);
     }
 
     // Print a log header
