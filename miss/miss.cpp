@@ -842,7 +842,11 @@ void ResetLogFile(bool standaloneExe)
         MoveFileExA(currentLogFilePath, oldLogFilePath, MOVEFILE_REPLACE_EXISTING);
 
         // Redirect stdout to this new file
-        freopen(currentLogFilePath, "w", stdout);
+        if (freopen(currentLogFilePath, "w", stdout) == NULL) {
+            // If we couldn't create a log file, just redirect stdout to NUL.
+            // We have to open _something_ or printf() will crash.
+            freopen("NUL", "w", stdout);
+        }
     }
 
     // Print a log header
