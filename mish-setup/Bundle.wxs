@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?define VCREDIST_VER = "14.31.31103" ?>
-<?define VCREDIST_X86_SIZE = "13725768" ?>
-<?define VCREDIST_X86_SHA1 = "15fe8e70c3c5582b70df173cd9b580331677735a" ?>
-<?define VCREDIST_X86_URL = "https://download.visualstudio.microsoft.com/download/pr/144a5711-f076-44fa-bf55-f7e0121eb30c/B7AE307237F869E09F7413691A2CD1944357B5CEE28049C0A0D3430B47BB3EDC/VC_redist.x86.exe" ?>
+<?define VCREDIST_VER = "14.32.31332.0" ?>
+<?define VCREDIST_X86_SIZE = "13730768" ?>
+<?define VCREDIST_X86_SHA1 = "29E23DD7C19B03EB59304F9D1F8E7209C1167348" ?>
+<?define VCREDIST_X86_URL = "https://download.visualstudio.microsoft.com/download/pr/7331f052-6c2d-4890-8041-8058fee5fb0f/CF92A10C62FFAB83B4A2168F5F9A05E5588023890B5C0CC7BA89ED71DA527B0F/VC_redist.x86.exe" ?>
 <?define VCREDIST_X86_UPGRADE_CODE = "65E5BD06-6392-3027-8C26-853107D3CF1A" ?>
 
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
@@ -39,7 +39,7 @@
         <RemotePayload Description="Microsoft Visual C++ 2015-2022 Redistributable - x86"
                        ProductName="Microsoft Visual C++ 2015-2022 Redistributable - x86"
                        Size="$(var.VCREDIST_X86_SIZE)"
-                       Version="$(var.VCREDIST_VER).0"
+                       Version="$(var.VCREDIST_VER)"
                        Hash="$(var.VCREDIST_X86_SHA1)"/>
 
         <!-- Newer version installed is fine -->
