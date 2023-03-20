@@ -10,6 +10,7 @@
 #include <powerbase.h>
 #include <VersionHelpers.h>
 #include <tlhelp32.h>
+#include <psapi.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
@@ -238,6 +239,30 @@ bool ExecuteCommand(PCSTR command, PCHAR outputBuffer, DWORD outputBufferLength)
     return true;
 }
 
+bool IsSunshineRunning()
+{
+    bool ret = false;
+    HANDLE processSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32 procEntry;
+    procEntry.dwSize = sizeof(procEntry);
+    Process32First(processSnapshot, &procEntry);
+
+    do
+    {
+        // If sunshine is running, then we can assume it is ready for streaming...
+        if (_stricmp(procEntry.szExeFile, "sunshine.exe") == 0)
+        {
+            ret = true;
+            break;
+        }
+    } while (Process32Next(processSnapshot, &procEntry));
+
+    CloseHandle(processSnapshot);
+
+    return ret;
+}
+
 bool IsGameStreamEnabled()
 {
     DWORD error;
@@ -291,6 +316,61 @@ bool IsCurrentlyStreaming()
     CloseHandle(processSnapshot);
 
     return ret;
+}
+
+bool IsCurrentlyStreamingWithSunshine()
+{
+    // Technically this does not work unless user has Sunshine running in user profile.
+    // But as far as I can tell, it does not prevent MIST from working.
+    // And there are use cases where a user is using the non-system version of Sunshine.
+
+    bool currentlyStreaming = false;
+    DWORD size = 0;
+    DWORD result = 0;
+    result = GetExtendedUdpTable(NULL, &size, true, AF_INET, UDP_TABLE_OWNER_MODULE, 0);
+
+    if ((result != ERROR_INSUFFICIENT_BUFFER) && (result != NO_ERROR))
+    {
+        return false;
+    }
+
+    PMIB_UDPTABLE_OWNER_MODULE pUDPTable = (PMIB_UDPTABLE_OWNER_MODULE)malloc(size);
+    if (pUDPTable == NULL)
+    {
+        return false;
+    }
+    
+    result = GetExtendedUdpTable(pUDPTable, &size, true, AF_INET, UDP_TABLE_OWNER_MODULE, 0);
+    if (result != NO_ERROR)
+    {
+        free(pUDPTable);
+        return false;
+    }
+
+    for (DWORD i = 0; i < pUDPTable->dwNumEntries; i++)
+    {
+        MIB_UDPROW_OWNER_MODULE module = pUDPTable->table[i];
+        unsigned pid = module.dwOwningPid;
+
+
+        // Get handle to the process
+        HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+        WCHAR moduleName[MAX_PATH] = {0}; // 1. Allocate memory for moduleName on the stack
+        if (processHandle != NULL)
+        {
+            GetModuleBaseNameW(processHandle, NULL, moduleName, MAX_PATH);
+            CloseHandle(processHandle); // 2. Close handle right after its usage
+        }
+        if (wcscmp(moduleName, L"Sunshine.exe") == 0)
+        {
+            currentlyStreaming = true;
+            break;
+        }
+    }
+
+    free(pUDPTable);
+
+    return currentlyStreaming;
 }
 
 bool IsConsoleSessionActive()
@@ -1325,14 +1405,13 @@ int main(int argc, char* argv[])
     fprintf(CONSOLE_OUT, "Checking if GameStream or Sunshine is enabled...\n");
 
     // First check if GameStream is enabled
-    if (!IsGameStreamEnabled()) {
+    if (!IsSunshineRunning() && !IsGameStreamEnabled()) {
         return -1;
     }
 
-    if (IsCurrentlyStreaming()) {
+    if (IsCurrentlyStreaming() || IsCurrentlyStreamingWithSunshine()) {
         DisplayMessage("The test cannot proceed because a GameStream or Sunshine session is currently active on this PC.\n\n"
             "Quit the currently running app on this host within Moonlight, or reboot your PC.");
-        return -1;
     }
 
     if (!IsConsoleSessionActive()) {
