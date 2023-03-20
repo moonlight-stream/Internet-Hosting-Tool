@@ -238,6 +238,30 @@ bool ExecuteCommand(PCSTR command, PCHAR outputBuffer, DWORD outputBufferLength)
     return true;
 }
 
+bool IsSunshineRunning()
+{
+    bool ret = false;
+    HANDLE processSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32 procEntry;
+    procEntry.dwSize = sizeof(procEntry);
+    Process32First(processSnapshot, &procEntry);
+
+    do
+    {
+        // If sunshine is running, then we can assume it is ready for streaming...
+        if (_stricmp(procEntry.szExeFile, "sunshine.exe") == 0)
+        {
+            ret = true;
+            break;
+        }
+    } while (Process32Next(processSnapshot, &procEntry));
+
+    CloseHandle(processSnapshot);
+
+    return ret;
+}
+
 bool IsGameStreamEnabled()
 {
     DWORD error;
@@ -292,6 +316,7 @@ bool IsCurrentlyStreaming()
 
     return ret;
 }
+
 
 bool IsConsoleSessionActive()
 {
@@ -1322,22 +1347,21 @@ int main(int argc, char* argv[])
         return err;
     }
 
-    fprintf(CONSOLE_OUT, "Checking if GameStream is enabled...\n");
+    fprintf(CONSOLE_OUT, "Checking if GameStream or Sunshine is enabled...\n");
 
     // First check if GameStream is enabled
-    if (!IsGameStreamEnabled()) {
+    if (!IsSunshineRunning() && !IsGameStreamEnabled()) {
         return -1;
     }
 
     if (IsCurrentlyStreaming()) {
-        DisplayMessage("The test cannot proceed because a GameStream session is currently running on this PC.\n\n"
+        DisplayMessage("The test cannot proceed because a GameStream session is currently active on this PC.\n\n"
             "Quit the currently running app on this host within Moonlight, or reboot your PC.");
-        return -1;
     }
 
     if (!IsConsoleSessionActive()) {
-        DisplayMessage("The system display is currently locked. You must sign in to your PC again to use GameStream.\n\n"
-            "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream-compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
+        DisplayMessage("The system display is currently locked. You must sign in to your PC again to use GameStream or Sunshine.\n\n"
+            "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream or Sunshine compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#display-locked-error");
         return -1;
     }
@@ -1380,7 +1404,7 @@ int main(int argc, char* argv[])
     if (ExecuteCommand("WMIC /Node:localhost /Namespace:\\\\root\\SecurityCenter2 Path FirewallProduct Get displayName", wmicBuf, sizeof(wmicBuf))) {
         fprintf(LOG_OUT, "Firewall products:\n%s", wmicBuf);
         if (strstr(wmicBuf, "displayName")) {
-            DisplayMessage("Detected anti-virus and/or firewall software installed on this system. This software may interfere with NVIDIA GameStream.\n\n"
+            DisplayMessage("Detected anti-virus and/or firewall software installed on this system. This software may interfere with NVIDIA GameStream and Sunshine.\n\n"
                 "Please try temporarily disabling your anti-virus or firewall software if you experience connection issues with Moonlight.",
                 "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting#known-application-compatibility-issues", MpInfo, false);
         }
@@ -1395,16 +1419,16 @@ int main(int argc, char* argv[])
     char msgBuf[2048];
     char portMsgBuf[512];
 
-    fprintf(CONSOLE_OUT, "Testing GameStream connectivity on this PC...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream or Sunshine connectivity on this PC...\n");
 
     // Try to connect via IPv4 loopback
     ss = {};
     sin.sin_family = AF_INET;
     sin.sin_addr = in4addr_loopback;
-    fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
+    fprintf(LOG_OUT, "Testing GameStream and Sunshine default ports via loopback\n");
     if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
-            "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
+            "Local connectivity check failed.\n\nFirst, try reinstalling GeForce Experience or Sunshine. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
@@ -1434,8 +1458,8 @@ int main(int argc, char* argv[])
             }
 
             // Try to connect via ZeroTier address
-            fprintf(CONSOLE_OUT, "Testing GameStream connectivity using ZeroTier...\n");
-            fprintf(LOG_OUT, "Testing GameStream ports via ZeroTier\n");
+            fprintf(CONSOLE_OUT, "Testing GameStream and Sunshine connectivity using ZeroTier...\n");
+            fprintf(LOG_OUT, "Testing the default ports for GameStream and Sunshine via ZeroTier\n");
             if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
                 snprintf(msgBuf, sizeof(msgBuf),
                     "ZeroTier connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
@@ -1466,18 +1490,18 @@ int main(int argc, char* argv[])
             ss = v6;
         }
         else {
-            DisplayMessage("Unable to perform GameStream connectivity check. Please check your Internet connection and try again.");
+            DisplayMessage("Unable to perform GameStream or Sunshine connectivity check. Please check your Internet connection and try again.");
             return -1;
         }
     }
 
-    fprintf(CONSOLE_OUT, "Testing GameStream connectivity on your local network...\n");
+    fprintf(CONSOLE_OUT, "Testing GameStream and Sunshine connectivity on your local network...\n");
 
     // Try to connect via LAN address
-    fprintf(LOG_OUT, "Testing GameStream ports via local network\n");
+    fprintf(LOG_OUT, "Testing GameStream or Sunshine default ports via local network\n");
     if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
         snprintf(msgBuf, sizeof(msgBuf),
-            "Local network GameStream connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
+            "Local network connectivity check failed. This is almost always caused by a firewall on your computer blocking the connection.\n\nTry temporarily disabling your antivirus and firewall.");
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
@@ -1497,7 +1521,7 @@ int main(int argc, char* argv[])
 
         // Detect a double NAT by detecting STUN and and UPnP mismatches
         if (sin.sin_addr.S_un.S_addr != locallyReportedWanAddr.sin_addr.S_un.S_addr) {
-            fprintf(LOG_OUT, "Testing GameStream ports via UPnP/NAT-PMP reported WAN address\n");
+            fprintf(LOG_OUT, "Testing GameStream and Sunshine default ports via UPnP/NAT-PMP reported WAN address\n");
 
             // We don't actually care about the outcome here but it's nice to have in logs
             // to determine whether solving the double NAT will actually make Moonlight work.
@@ -1528,10 +1552,10 @@ int main(int argc, char* argv[])
         bool allPortsFailedOnV4 = true;
 
         // First try the relay server over IPv4. If this passes, it's considered a full success
-        fprintf(LOG_OUT, "Testing GameStream ports via IPv4 loopback server\n");
+        fprintf(LOG_OUT, "Testing GameStream and Sunshine ports via IPv4 loopback server\n");
         for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
             if (current->ai_family == AF_INET) {
-                fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using a relay server...\n");
+                fprintf(CONSOLE_OUT, "Testing GameStream and Sunshine connectivity over the Internet using a relay server...\n");
 
                 if (!IsTestServerReachable(current, 443)) {
                     fprintf(CONSOLE_OUT, "Skipping unreachable relay server...\n");
@@ -1558,10 +1582,10 @@ int main(int argc, char* argv[])
         }
 
         // If that fails, try the relay server over IPv6. If this passes, it will be a partial success
-        fprintf(LOG_OUT, "Testing GameStream ports via IPv6 loopback server\n");
+        fprintf(LOG_OUT, "Testing GameStream and Sunshine default ports via IPv6 loopback server\n");
         for (struct addrinfo* current = result; current != NULL; current = current->ai_next) {
             if (current->ai_family == AF_INET6) {
-                fprintf(CONSOLE_OUT, "Testing GameStream connectivity over the Internet using an IPv6 relay server...\n");
+                fprintf(CONSOLE_OUT, "Testing connectivity over the Internet using an IPv6 relay server...\n");
 
                 if (!IsTestServerReachable(current, 443)) {
                     fprintf(CONSOLE_OUT, "Skipping unreachable IPv6 relay server...\n");
@@ -1624,7 +1648,7 @@ int main(int argc, char* argv[])
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#connected-through-another-router-error");
     }
     else {
-        snprintf(msgBuf, sizeof(msgBuf), "Internet GameStream connectivity check failed.\n\n"
+        snprintf(msgBuf, sizeof(msgBuf), "Internet connectivity check failed.\n\n"
             "First, try restarting your router. If that fails, check that UPnP is enabled in your router settings. For more information and workarounds, click the Help button.\n\n"
             "The following ports were not forwarded properly:\n%s", portMsgBuf);
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#internet-gamestream-connectivity-check-error");
