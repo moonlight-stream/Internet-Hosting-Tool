@@ -318,60 +318,6 @@ bool IsCurrentlyStreaming()
     return ret;
 }
 
-bool IsCurrentlyStreamingWithSunshine()
-{
-    // Technically this does not work unless user has Sunshine running in user profile.
-    // But as far as I can tell, it does not prevent MIST from working.
-    // And there are use cases where a user is using the non-system version of Sunshine.
-
-    bool currentlyStreaming = false;
-    DWORD size = 0;
-    DWORD result = 0;
-    result = GetExtendedUdpTable(NULL, &size, true, AF_INET, UDP_TABLE_OWNER_MODULE, 0);
-
-    if ((result != ERROR_INSUFFICIENT_BUFFER) && (result != NO_ERROR))
-    {
-        return false;
-    }
-
-    PMIB_UDPTABLE_OWNER_MODULE pUDPTable = (PMIB_UDPTABLE_OWNER_MODULE)malloc(size);
-    if (pUDPTable == NULL)
-    {
-        return false;
-    }
-    
-    result = GetExtendedUdpTable(pUDPTable, &size, true, AF_INET, UDP_TABLE_OWNER_MODULE, 0);
-    if (result != NO_ERROR)
-    {
-        free(pUDPTable);
-        return false;
-    }
-
-    for (DWORD i = 0; i < pUDPTable->dwNumEntries; i++)
-    {
-        MIB_UDPROW_OWNER_MODULE module = pUDPTable->table[i];
-        unsigned pid = module.dwOwningPid;
-
-
-        // Get handle to the process
-        HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-        WCHAR moduleName[MAX_PATH] = {0}; // 1. Allocate memory for moduleName on the stack
-        if (processHandle != NULL)
-        {
-            GetModuleBaseNameW(processHandle, NULL, moduleName, MAX_PATH);
-            CloseHandle(processHandle); // 2. Close handle right after its usage
-        }
-        if (wcscmp(moduleName, L"Sunshine.exe") == 0)
-        {
-            currentlyStreaming = true;
-            break;
-        }
-    }
-
-    free(pUDPTable);
-
-    return currentlyStreaming;
-}
 
 bool IsConsoleSessionActive()
 {
@@ -1409,8 +1355,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (IsCurrentlyStreaming() || IsCurrentlyStreamingWithSunshine()) {
-        DisplayMessage("The test cannot proceed because a GameStream or Sunshine session is currently active on this PC.\n\n"
+    if (IsCurrentlyStreaming()) {
+        DisplayMessage("The test cannot proceed because a GameStream session is currently active on this PC.\n\n"
             "Quit the currently running app on this host within Moonlight, or reboot your PC.");
     }
 
