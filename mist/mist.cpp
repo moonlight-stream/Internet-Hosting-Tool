@@ -10,7 +10,6 @@
 #include <powerbase.h>
 #include <VersionHelpers.h>
 #include <tlhelp32.h>
-#include <psapi.h>
 
 #pragma comment(lib, "miniupnpc.lib")
 #pragma comment(lib, "libnatpmp.lib")
