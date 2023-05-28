@@ -238,7 +238,28 @@ bool ExecuteCommand(PCSTR command, PCHAR outputBuffer, DWORD outputBufferLength)
     return true;
 }
 
-bool IsGameStreamEnabled()
+bool IsSunshineRunning()
+{
+    bool ret = false;
+    HANDLE processSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32 procEntry;
+    procEntry.dwSize = sizeof(procEntry);
+    Process32First(processSnapshot, &procEntry);
+
+    do {
+        if (_stricmp(procEntry.szExeFile, "sunshine.exe") == 0) {
+            ret = true;
+            break;
+        }
+    } while (Process32Next(processSnapshot, &procEntry));
+
+    CloseHandle(processSnapshot);
+
+    return ret;
+}
+
+bool IsGameStreamEnabled(bool sunshineRunning)
 {
     DWORD error;
     DWORD enabled;
@@ -248,8 +269,10 @@ bool IsGameStreamEnabled()
     error = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\NVIDIA Corporation\\NvStream", 0, KEY_READ | KEY_WOW64_64KEY, &key);
     if (error != ERROR_SUCCESS) {
         fprintf(LOG_OUT, "RegOpenKeyEx() failed: %d\n", error);
-        DisplayMessage("GeForce Experience was not detected on this PC. Make sure you're installing this utility on your GeForce GameStream-compatible PC, not the device running Moonlight.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
+        if (!sunshineRunning) {
+            DisplayMessage("Neither GeForce Experience nor Sunshine are running on this PC. Make sure you're installing this utility on your host PC, not the device running Moonlight.",
+                "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
+        }
         return false;
     }
 
@@ -261,8 +284,10 @@ bool IsGameStreamEnabled()
         if (error != ERROR_SUCCESS) {
             fprintf(LOG_OUT, "RegQueryValueExA() failed: %d\n", error);
         }
-        DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.",
-            "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
+        if (!sunshineRunning) {
+            DisplayMessage("GameStream is not enabled in GeForce Experience. Please open GeForce Experience settings, navigate to the Shield tab, and turn GameStream on.",
+                "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
+        }
         return false;
     }
     else {
@@ -1324,9 +1349,19 @@ int main(int argc, char* argv[])
 
     fprintf(CONSOLE_OUT, "Checking if GameStream is enabled...\n");
 
-    // First check if GameStream is enabled
-    if (!IsGameStreamEnabled()) {
-        return -1;
+    bool sunshineRunning = IsSunshineRunning();
+    bool gfeGameStreamRunning = true;
+    if (!IsGameStreamEnabled(sunshineRunning)) {
+        if (sunshineRunning) {
+            DisplayMessage("The Moonlight Internet Hosting Tool is not designed for use with Sunshine.\n\n"
+                "To stream over the Internet with Sunshine, simply enable the UPnP option in the Sunshine Web UI.\n\n"
+                "Test results WILL be inaccurate if the Port option in Sunshine has been adjusted from the default value of 47989!",
+                nullptr, MpWarn, false);
+            gfeGameStreamRunning = false;
+        }
+        else {
+            return -1;
+        }
     }
 
     if (IsCurrentlyStreaming()) {
@@ -1335,7 +1370,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (!IsConsoleSessionActive()) {
+    if (gfeGameStreamRunning && !IsConsoleSessionActive()) {
         DisplayMessage("The system display is currently locked. You must sign in to your PC again to use GameStream.\n\n"
             "This is most often due to Microsoft Remote Desktop locking the screen. Use an alternate GameStream-compatible remote desktop solution like Chrome Remote Desktop or TeamViewer to unlock the PC and prevent this error in the future.",
             "https://github.com/moonlight-stream/moonlight-docs/wiki/Internet-Streaming-Errors#display-locked-error");
@@ -1403,8 +1438,15 @@ int main(int argc, char* argv[])
     sin.sin_addr = in4addr_loopback;
     fprintf(LOG_OUT, "Testing GameStream ports via loopback\n");
     if (!TestAllPorts(&ss, nullptr, portMsgBuf, sizeof(portMsgBuf), false, true)) {
-        snprintf(msgBuf, sizeof(msgBuf),
-            "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
+        if (gfeGameStreamRunning) {
+            snprintf(msgBuf, sizeof(msgBuf),
+                "Local GameStream connectivity check failed.\n\nFirst, try reinstalling GeForce Experience. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.");
+        }
+        else {
+            snprintf(msgBuf, sizeof(msgBuf),
+                "Local GameStream connectivity check failed.\n\nFirst, try restarting Sunshine. If that doesn't resolve the problem, try temporarily disabling your antivirus and firewall.\n\nNOTE: Sunshine must be configured to use the default 47989 port to test with this tool.");
+        }
+
         DisplayMessage(msgBuf, "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting");
         return -1;
     }
