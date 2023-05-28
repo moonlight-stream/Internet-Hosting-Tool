@@ -542,6 +542,42 @@ bool IsGameStreamEnabled()
     return enabled != 0;
 }
 
+bool IsAlternateHostSoftwareRunning()
+{
+    int err;
+    PMIB_TCPTABLE tcp_table = nullptr;
+    ULONG table_size = 0;
+
+    do {
+        // Query all open TCPv4 sockets
+        err = GetTcpTable(tcp_table, &table_size, false);
+        if (err == ERROR_INSUFFICIENT_BUFFER) {
+            free(tcp_table);
+            tcp_table = (PMIB_TCPTABLE)malloc(table_size);
+        }
+    } while (err == ERROR_INSUFFICIENT_BUFFER);
+
+    if (!tcp_table || err != NO_ERROR) {
+        printf("GetTcpTable() failed: %d\n", err);
+        free(tcp_table);
+        return false;
+    }
+
+    bool result = false;
+    for (DWORD i = 0; i < tcp_table->dwNumEntries; i++) {
+        auto& entry = tcp_table->table[i];
+
+        // Look for TCP 47989 port in the listening state
+        if (entry.dwLocalPort == _byteswap_ushort(47989) && entry.dwState == MIB_TCP_STATE_LISTEN) {
+            result = true;
+            break;
+        }
+    }
+
+    free(tcp_table);
+    return result;
+}
+
 void UpdatePortMappingsForTarget(bool enable, char* targetAddressIP4, char* internalAddressIP4, char* upstreamAddressIP4)
 {
     natpmp_t natpmp;
@@ -936,10 +972,18 @@ int Run(bool standaloneExe)
         bool gameStreamEnabled = IsGameStreamEnabled();
 
         if (gameStreamEnabled) {
-            printf("GameStream is ON!\n");
+            printf("GFE GameStream is ON!\n");
         }
         else {
-            printf("GameStream is OFF!\n");
+            printf("GFE GameStream is OFF!\n");
+
+            if (IsAlternateHostSoftwareRunning()) {
+                printf("Sunshine is RUNNING!\n");
+                gameStreamEnabled = true;
+            }
+            else {
+                printf("Sunshine is NOT RUNNING!\n");
+            }
         }
 
         // Acquire the mapping lock and update port mappings
