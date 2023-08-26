@@ -912,7 +912,7 @@ DWORD WINAPI GameStreamStateChangeThread(PVOID Context)
 
         // Notify the main thread when the GameStream state changes
         bool lastGameStreamState = IsGameStreamEnabled();
-        while ((err = RegNotifyChangeKeyValue(key, true, REG_NOTIFY_CHANGE_LAST_SET, nullptr, false)) == ERROR_SUCCESS) {
+        while ((err = RegNotifyChangeKeyValue(key, true, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET, nullptr, false)) == ERROR_SUCCESS) {
             bool currentGameStreamState = IsGameStreamEnabled();
             if (lastGameStreamState != currentGameStreamState) {
                 SetEvent((HANDLE)Context);
